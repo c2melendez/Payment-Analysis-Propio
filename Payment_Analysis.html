@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitácora de Ciclo — Rendimiento Diario</title>
+<!-- ===== PWA (item K) =====
+     Para que esta app sea instalable de verdad necesita manifest.json y sw.js servidos
+     junto a este archivo por HTTP(S) (no abriendo el .html directo con file://, ni todo
+     en un solo archivo — un manifest y un service worker son, por definición, archivos
+     aparte que el navegador debe poder pedir por su cuenta). Se incluyen ambos archivos
+     junto a este HTML; súbelos los tres juntos a cualquier hosting estático (GitHub Pages,
+     Netlify, Vercel, etc.) para poder "Instalar" la app desde el navegador. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12140f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bitácora">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312140f'/%3E%3Cpath d='M16 6 L26 16 L16 26 L6 16 Z' fill='%23c9d97a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#12140f;
+    --panel:#191c15;
+    --panel-2:#1f2318;
+    --line:#2b2f22;
+    --ink:#eef0e6;
+    --ink-dim:#9aa08a;
+    --ink-faint:#5c6350;
+    --red:#e0523f;
+    --red-dim:#3a231e;
+    --amber:#d9a441;
+    --amber-dim:#3a3220;
+    --green:#7fb241;
+    --green-dim:#26301a;
+    --wire:#3b4230;
+    --accent:#c9d97a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #1b2013 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'JetBrains Mono', monospace;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  h1,h2,h3,.disp{font-family:'Space Grotesk', sans-serif;}
+  ::selection{background:var(--accent);color:#12140f;}
+
+  /* ===== Top bar ===== */
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px clamp(16px,4vw,48px) 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;}
+  .brand .mark{
+    width:10px;height:10px;border-radius:2px;background:var(--accent);
+    display:inline-block;transform:rotate(45deg);
+  }
+  .brand h1{font-size:19px;font-weight:600;letter-spacing:.02em;margin:0;}
+  .brand .sub{color:var(--ink-faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}
+  .top-right{display:flex;align-items:center;gap:10px;}
+  .clock{font-size:12px;color:var(--ink-dim);text-align:right;line-height:1.4;}
+  .clock b{color:var(--ink);font-weight:600;}
+  .gear{
+    width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink-dim);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:15px;
+    transition:.15s;
+  }
+  .gear:hover{color:var(--accent);border-color:var(--wire);}
+
+  /* ===== Tabs ===== */
+  nav.tabs{
+    display:flex;gap:2px;padding:0 clamp(16px,4vw,48px);
+    border-bottom:1px solid var(--line);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    background:none;border:none;color:var(--ink-faint);
+    font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;
+    letter-spacing:.03em;text-transform:uppercase;
+    padding:14px 16px 12px;cursor:pointer;border-bottom:2px solid transparent;
+    white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--ink);border-bottom-color:var(--accent);}
+  nav.tabs button:hover:not(.active){color:var(--ink-dim);}
+
+  main{max-width:1080px;margin:0 auto;padding:28px clamp(16px,4vw,48px) 0;}
+  .view{display:none;}
+  .view.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;}
+  @media (max-width:820px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:20px;
+  }
+  .card + .card{margin-top:18px;}
+  .card h2{font-size:13px;margin:0 0 16px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;}
+  .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px;}
+
+  /* status pill */
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+  .pill .dot{width:6px;height:6px;border-radius:50%;}
+  .pill.red{background:var(--red-dim);color:var(--red);}
+  .pill.red .dot{background:var(--red);}
+  .pill.amber{background:var(--amber-dim);color:var(--amber);}
+  .pill.amber .dot{background:var(--amber);}
+  .pill.green{background:var(--green-dim);color:var(--green);}
+  .pill.green .dot{background:var(--green);}
+
+  /* ===== Today hero ===== */
+  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
+  .day-title{font-size:26px;font-weight:600;font-family:'Space Grotesk',sans-serif;}
+  .day-sub{color:var(--ink-dim);font-size:12px;margin-top:2px;}
+
+  .ring-wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap;}
+  .ring-num{font-size:34px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+  .ring-num small{font-size:14px;font-weight:500;color:var(--ink-dim);}
+  .stat-row{display:flex;gap:26px;flex-wrap:wrap;margin-top:6px;}
+  .stat{min-width:90px;}
+  .stat .v{font-size:18px;font-weight:600;}
+  .stat .k{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
+
+  /* progress bar */
+  .bar{height:10px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;margin-top:14px;position:relative;}
+  .bar > i{display:block;height:100%;border-radius:6px 0 0 6px;transition:width .4s ease;}
+  .bar.red > i{background:var(--red);}
+  .bar.amber > i{background:var(--amber);}
+  .bar.green > i{background:var(--green);}
+  .bar .mark50{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--wire);}
+
+  /* entry form */
+  .entry-form{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;}
+  .entry-form input[type=number]{width:100px;}
+  .entry-form input[type=text]{flex:1;min-width:120px;}
+  input, select{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    font-family:'JetBrains Mono',monospace;font-size:13px;padding:9px 10px;border-radius:6px;
+    outline:none;
+  }
+  input:focus, select:focus{border-color:var(--accent);}
+  button.btn{
+    background:var(--accent);color:#161811;border:none;border-radius:6px;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
+    padding:9px 16px;cursor:pointer;letter-spacing:.02em;
+  }
+  button.btn:hover{filter:brightness(1.08);}
+  button.btn.ghost{background:transparent;border:1px solid var(--wire);color:var(--ink-dim);}
+  button.btn.ghost:hover{color:var(--ink);border-color:var(--accent);}
+  button.btn.sm{padding:6px 11px;font-size:11px;}
+
+  .entries{margin-top:14px;border-top:1px solid var(--line);}
+  .entry-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:9px 2px;border-bottom:1px dashed var(--line);font-size:12.5px;
+  }
+  .entry-row .l{color:var(--ink-dim);}
+  .entry-row .amt{color:var(--ink);font-weight:600;}
+  .entry-row button{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:14px;}
+  .entry-row button:hover{color:var(--red);}
+  .empty{color:var(--ink-faint);font-size:12px;padding:14px 2px;text-align:center;}
+
+  /* money card rows */
+  .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .kv:last-child{border-bottom:none;}
+  .kv .k{color:var(--ink-dim);}
+  .kv .v{font-weight:600;}
+  .kv .v.small{font-size:11px;color:var(--ink-faint);font-weight:400;}
+
+  /* ===== Cycle strip (signature element) ===== */
+  .strip-wrap{overflow-x:auto;padding-bottom:6px;}
+  .strip{display:grid;grid-template-columns:repeat(14,minmax(46px,1fr));gap:6px;min-width:640px;}
+  .cell{
+    aspect-ratio:1/1.25;border-radius:7px;position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border:1px solid var(--line);background:var(--panel-2);
+    font-size:10px;color:var(--ink-faint);
+  }
+  .cell .dnum{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:var(--ink-dim);}
+  .cell .dlabel{text-transform:uppercase;letter-spacing:.06em;font-size:8.5px;margin-top:1px;}
+  .cell.past.red{background:var(--red-dim);border-color:#5a3229;}
+  .cell.past.amber{background:var(--amber-dim);border-color:#5a4a25;}
+  .cell.past.green{background:var(--green-dim);border-color:#3a4a26;}
+  .cell.past .dnum{color:var(--ink);}
+  .cell.today{border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(201,217,122,.12);}
+  .cell.today .dnum{color:var(--accent);}
+  .cell.future{border-style:dashed;opacity:.55;}
+  .cell.future.proj-red{background:linear-gradient(180deg, transparent 0%, var(--red-dim) 100%);}
+  .cell.future.proj-amber{background:linear-gradient(180deg, transparent 0%, var(--amber-dim) 100%);}
+  .cell.future.proj-green{background:linear-gradient(180deg, transparent 0%, var(--green-dim) 100%);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:10.5px;color:var(--ink-faint);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+
+  /* projection note */
+  .note{
+    font-size:11.5px;color:var(--ink-dim);background:var(--panel-2);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    padding:10px 12px;border-radius:0 6px 6px 0;margin-top:14px;line-height:1.55;
+  }
+  .note b{color:var(--ink);}
+
+  /* reports */
+  .cycle-list{display:flex;flex-direction:column;gap:10px;}
+  .cycle-item{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    padding:13px 15px;cursor:pointer;transition:.15s;
+  }
+  .cycle-item:hover{border-color:var(--wire);}
+  .cycle-item .range{font-weight:600;font-size:13px;}
+  .cycle-item .tag{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+  .cycle-item .right{text-align:right;}
+  .cycle-item .amount{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;}
+
+  .compare-wrap{overflow-x:auto;overflow-y:hidden;margin-top:8px;border-radius:6px;position:relative;}
+  .compare-wrap::-webkit-scrollbar{height:7px;}
+  .compare-wrap::-webkit-scrollbar-thumb{background:var(--wire);border-radius:4px;}
+  .compare{display:inline-flex;align-items:flex-end;gap:14px;height:150px;padding:20px 6px 0;min-width:100%;box-sizing:border-box;}
+  .compare .colwrap{flex:0 0 auto;width:58px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+  .compare .col{width:100%;max-width:46px;border-radius:5px 5px 2px 2px;position:relative;transition:.4s;}
+  .compare .lbl{font-size:9.5px;color:var(--ink-faint);margin-top:8px;text-align:center;white-space:nowrap;}
+  .compare .val{font-size:10px;color:var(--ink-dim);margin-bottom:5px;white-space:nowrap;}
+  .compare-hint{font-size:10px;color:var(--ink-faint);margin-top:6px;text-align:right;}
+
+  footer.credit{max-width:1080px;margin:40px auto 0;padding:0 clamp(16px,4vw,48px);color:var(--ink-faint);font-size:10.5px;line-height:1.6;}
+
+  /* modal */
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(10,11,7,.7);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;
+  }
+  .modal-bg.open{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:22px;width:100%;max-width:420px;
+  }
+  .modal h3{margin:0 0 16px;font-size:15px;}
+
+  /* ===== Ajustes: cuadro con scroll + botones up/down ===== */
+  #modalBg .modal{
+    position:relative;
+    max-height:min(80vh,640px);
+    display:flex;flex-direction:column;
+    padding-right:44px; /* espacio para los botones de scroll */
+  }
+  #modalBg .modal-scroll{
+    overflow-y:auto;
+    padding-right:6px;
+    scrollbar-width:thin;
+    scrollbar-color:var(--wire) var(--panel-2);
+  }
+  #modalBg .modal-scroll::-webkit-scrollbar{width:7px;}
+  #modalBg .modal-scroll::-webkit-scrollbar-track{background:var(--panel-2);border-radius:6px;}
+  #modalBg .modal-scroll::-webkit-scrollbar-thumb{background:var(--wire);border-radius:6px;}
+  #modalBg .modal-scroll::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+  .modal-scroll-btns{
+    position:absolute;top:22px;right:10px;bottom:22px;
+    display:flex;flex-direction:column;justify-content:space-between;
+    align-items:center;pointer-events:none;
+  }
+  .modal-scroll-btn{
+    pointer-events:auto;
+    width:26px;height:26px;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:11px;line-height:1;transition:.12s;flex-shrink:0;
+  }
+  .modal-scroll-btn:hover{color:var(--accent);border-color:var(--wire);}
+  .modal-scroll-btn:active{transform:translateY(1px);}
+  .modal-scroll-btn.disabled{opacity:.3;cursor:default;pointer-events:none;}
+  .field{margin-bottom:13px;}
+  .field label{display:block;font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
+  .field input{width:100%;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+  .rate-status{font-size:10.5px;color:var(--ink-faint);margin-top:-6px;margin-bottom:12px;}
+  .rate-status.stale{color:var(--amber);}
+  .rate-status.very-stale{color:var(--red);}
+
+  /* editable title */
+  .brand h1[contenteditable]{outline:none;border-radius:4px;padding:1px 4px;margin:-1px -4px;cursor:text;}
+  .brand h1[contenteditable]:hover{background:var(--panel-2);}
+  .brand h1[contenteditable]:focus{background:var(--panel-2);box-shadow:0 0 0 1px var(--wire);}
+
+  /* day-edit modal scroll */
+  #dayEntries{max-height:280px;overflow-y:auto;}
+
+  /* cycle strip cells are clickable */
+  .cell.clickable{cursor:pointer;transition:.12s;}
+  .cell.clickable:hover{border-color:var(--accent);}
+
+  /* ===== Focus / Timer widget (visible on every tab) ===== */
+  .focus-widget{
+    position:fixed;right:16px;bottom:16px;z-index:70;
+    width:212px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+  }
+  .focus-widget.live{border-color:var(--accent);}
+  .fw-head{
+    display:flex;align-items:center;gap:7px;padding:10px 12px;cursor:default;
+    border-bottom:1px solid var(--line);
+  }
+  .fw-dot{width:7px;height:7px;border-radius:50%;background:var(--ink-faint);flex-shrink:0;}
+  .fw-dot.live{background:var(--red);animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .fw-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
+  .focus-widget.live .fw-label{color:var(--accent);}
+  .fw-collapse{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:11px;padding:2px 4px;}
+  .fw-body{padding:12px;}
+  .fw-modes{display:flex;gap:4px;margin-bottom:10px;}
+  .fw-mode{flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-faint);
+    font-size:9.5px;padding:6px 4px;border-radius:5px;cursor:pointer;letter-spacing:.02em;text-transform:uppercase;}
+  .fw-mode.active{background:var(--wire);color:var(--ink);border-color:var(--accent);}
+  .fw-time{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;text-align:center;margin:4px 0 10px;letter-spacing:.02em;}
+  .fw-setrow{display:flex;gap:6px;margin-bottom:10px;}
+  .fw-setrow input{width:100%;padding:7px 8px;font-size:12px;}
+  .fw-controls{display:flex;gap:6px;}
+  .fw-controls button{flex:1;padding:7px 4px;font-size:11px;}
+  @media (max-width:520px){.focus-widget{width:168px;right:10px;bottom:10px;}.fw-time{font-size:21px;}}
+
+  /* ===== Calendar widget (visible on every tab, opposite corner) ===== */
+  .cal-widget{
+    position:fixed;left:16px;bottom:16px;z-index:70;
+    width:228px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+  }
+  .cal-head{
+    display:flex;align-items:center;gap:7px;padding:10px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .cal-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
+  .cal-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
+  .cal-collapse{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:11px;padding:2px 4px;}
+  .cal-body{padding:12px;}
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .cal-nav-btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);
+    border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:13px;line-height:1;}
+  .cal-nav-btn:hover{color:var(--accent);border-color:var(--wire);}
+  .cal-month{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:600;text-transform:capitalize;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-dow{font-size:9px;color:var(--ink-faint);text-align:center;text-transform:uppercase;padding-bottom:3px;}
+  .cal-day{
+    aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+    font-size:11px;color:var(--ink-faint);border-radius:5px;position:relative;
+  }
+  .cal-day.other-month{opacity:.35;}
+  .cal-day.in-cycle{background:var(--amber-dim);color:var(--ink);}
+  .cal-day.today{border:2px solid var(--accent);color:var(--accent);font-weight:700;}
+  .cal-day.today.in-cycle{background:var(--green-dim);}
+  .cal-legend{display:flex;gap:10px;margin-top:10px;font-size:9.5px;color:var(--ink-faint);}
+  .cal-legend span{display:inline-flex;align-items:center;gap:4px;}
+  .cal-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+  @media (max-width:520px){.cal-widget{width:190px;left:10px;bottom:10px;}}
+  /* keep both floating widgets from overlapping tiny screens: shrink when narrow */
+  @media (max-width:400px){.focus-widget,.cal-widget{width:150px;}.fw-time{font-size:18px;}.cal-day{font-size:9.5px;}}
+
+  /* ===== Agent ID badge (parte superior central de la ventana) ===== */
+  .agent-badge{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);
+    display:none;align-items:center;gap:7px;
+    background:var(--panel);border:1px solid var(--wire);border-radius:999px;
+    padding:6px 14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;
+    letter-spacing:.03em;color:var(--accent);
+    box-shadow:0 6px 18px rgba(0,0,0,.3);z-index:80;
+  }
+  .agent-badge.show{display:inline-flex;}
+  .agent-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+  .agent-badge span:not(.dot){color:var(--ink-dim);}
+  .agent-badge #agentIdText{color:var(--accent);}
+  @media (max-width:640px){.agent-badge{position:static;transform:none;display:inline-flex;margin:10px auto 0;}
+    .agent-badge:not(.show){display:none;}}
+
+  /* ===== Resalte: Importar hoja de cálculo (req. 1) ===== */
+  .field-highlight{
+    border:1px solid var(--accent);border-radius:8px;
+    padding:13px;background:var(--panel-2);
+    box-shadow:0 0 0 3px rgba(201,217,122,.14);
+    position:relative;
+  }
+  .field-highlight label{color:var(--accent);font-weight:700;}
+  .field-highlight .btn.ghost{
+    border-color:var(--accent);color:var(--accent);
+    animation:importGlow 2.2s ease-in-out infinite;
+  }
+  @keyframes importGlow{
+    0%,100%{box-shadow:0 0 0 0 rgba(201,217,122,.35);}
+    50%{box-shadow:0 0 0 5px rgba(201,217,122,0);}
+  }
+  .field-highlight .badge-star{
+    position:absolute;top:-9px;right:10px;
+    background:var(--accent);color:#161811;font-size:9.5px;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;border-radius:999px;
+    padding:3px 9px;
+  }
+
+  /* ===== Barras comparativas del detalle de ciclo (req. 3) ===== */
+  .rel-block{margin-bottom:18px;}
+  .rel-block h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-dim);margin:0 0 8px;font-weight:600;}
+  .split-bar{height:16px;border-radius:8px;overflow:hidden;display:flex;border:1px solid var(--line);background:var(--panel-2);}
+  .split-bar > i{display:block;height:100%;}
+  .split-legend{display:flex;justify-content:space-between;font-size:11.5px;margin-top:6px;color:var(--ink-dim);}
+  .split-legend b{color:var(--ink);}
+  .seg-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+  .seg-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+  .seg-row .seg-name{width:74px;flex-shrink:0;color:var(--ink-dim);}
+  .seg-row .seg-bar{flex:1;height:9px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;}
+  .seg-row .seg-bar > i{display:block;height:100%;background:var(--accent);}
+  .seg-row .seg-val{width:44px;text-align:right;flex-shrink:0;font-weight:600;}
+  .seg-row.best .seg-name{color:var(--accent);font-weight:700;}
+
+  /* ===== Modos de visualización del rendimiento (req. 7) ===== */
+  .viz-modes{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap;}
+  .viz-mode-btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-faint);
+    font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.02em;
+    padding:5px 9px;border-radius:5px;cursor:pointer;text-transform:uppercase;}
+  .viz-mode-btn.active{background:var(--wire);color:var(--ink);border-color:var(--accent);}
+  #perfViz svg{display:block;width:100%;height:auto;}
+  #perfViz{min-height:14px;}
+</style>
+</head>
+<body>
+
+<!-- ===================== TEMPORIZADOR FLOTANTE (visible en todas las pestañas) ===================== -->
+<div class="focus-widget" id="focusWidget">
+  <div class="fw-head">
+    <span class="fw-dot" id="fwDot"></span>
+    <span class="fw-label" id="fwLabel">Temporizador</span>
+    <button class="fw-collapse" id="fwCollapse" title="Minimizar/expandir">▾</button>
+  </div>
+  <div class="fw-body" id="fwBody">
+    <div class="fw-modes">
+      <button class="fw-mode active" data-mode="down" id="fwModeDown">Cuenta regresiva</button>
+      <button class="fw-mode" data-mode="up" id="fwModeUp">Cuenta progresiva</button>
+    </div>
+    <div class="fw-time" id="fwTime">25:00</div>
+    <div class="fw-setrow" id="fwSetRow">
+      <input type="number" id="fwMinutesInput" min="1" value="25" title="Minutos">
+      <button class="btn ghost sm" id="fwSetBtn">Fijar</button>
+    </div>
+    <div class="fw-controls">
+      <button class="btn sm" id="fwStart">▶ Iniciar</button>
+      <button class="btn ghost sm" id="fwPause">⏸</button>
+      <button class="btn ghost sm" id="fwReset">↺</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CALENDARIO FLOTANTE (visible en todas las pestañas) ===================== -->
+<div class="cal-widget" id="calWidget">
+  <div class="cal-head">
+    <span class="cal-mark"></span>
+    <span class="cal-label">Calendario del ciclo</span>
+    <button class="cal-collapse" id="calCollapse" title="Minimizar/expandir">▾</button>
+  </div>
+  <div class="cal-body" id="calBody">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" id="calPrev">‹</button>
+      <span class="cal-month" id="calMonthLabel">—</span>
+      <button class="cal-nav-btn" id="calNext">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">
+      <span><i style="background:var(--amber-dim);border:1px solid var(--amber)"></i> Ciclo actual</span>
+      <span><i style="background:var(--green-dim);border:2px solid var(--accent)"></i> Hoy</span>
+    </div>
+  </div>
+</div>
+
+<div class="agent-badge" id="agentBadge" title="Agent ID detectado desde la hoja de cálculo importada">
+  <span class="dot"></span><span>Agent</span> <span id="agentIdText">—</span>
+</div>
+
+<header class="top">
+  <div class="brand">
+    <span class="mark"></span>
+    <div>
+      <h1 id="appTitle" contenteditable="true" spellcheck="false" title="Clic para editar el título">Bitácora de Ciclo</h1>
+      <div class="sub">Rendimiento diario &middot; 14 días &middot; Sáb&ndash;Vie</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="clock" id="clockBox">&nbsp;</div>
+    <button class="gear" id="btnSettings" title="Ajustes">⚙</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-view="hoy">Hoy</button>
+  <button data-view="ciclo">Ciclo</button>
+  <button data-view="reportes">Reportes</button>
+</nav>
+
+<main>
+
+  <!-- ===================== VISTA: HOY ===================== -->
+  <section class="view active" id="view-hoy">
+    <div class="grid">
+      <div>
+        <div class="card">
+          <div class="hero-top">
+            <div>
+              <div class="eyebrow" id="hoyEyebrow">Cargando…</div>
+              <div class="day-title" id="hoyTitulo">—</div>
+              <div class="day-sub" id="hoySub">—</div>
+            </div>
+            <div class="pill" id="hoyPill"><span class="dot"></span><span id="hoyPillText">—</span></div>
+          </div>
+
+          <div class="ring-wrap">
+            <div>
+              <div class="ring-num" id="hoyMin">0 <small>/ 660 min</small></div>
+              <div class="day-sub" id="hoyHoras">0:00 h</div>
+            </div>
+            <div style="flex:1;min-width:220px;">
+              <div id="perfViz"></div>
+              <div class="stat-row">
+                <div class="stat"><div class="v" id="hoyPct">0%</div><div class="k">de la meta</div></div>
+                <div class="stat"><div class="v" id="hoyResta">660</div><div class="k">min. restantes</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry-form">
+            <input type="number" id="inMin" placeholder="min" min="1">
+            <input type="text" id="inNota" placeholder="nota (opcional)">
+            <button class="btn" id="btnAdd">+ Agregar</button>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button class="btn ghost sm" id="btnClearToday" style="border-color:#5a3229;color:var(--red);">🗑 Limpiar todo hoy</button>
+          </div>
+
+          <div class="entries" id="hoyEntries"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Dinero de hoy</h2>
+          <div class="kv"><span class="k">Generado (USD)</span><span class="v" id="hoyUsd">$0.00</span></div>
+          <div class="kv"><span class="k">Equivalente (HNL)</span><span class="v" id="hoyHnl">L 0.00</span></div>
+          <div class="kv"><span class="k">Tasa usada</span><span class="v small" id="hoyTasa">—</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Ciclo en curso</h2>
+          <div class="kv"><span class="k">Día</span><span class="v" id="miniDia">1 / 14</span></div>
+          <div class="kv"><span class="k">Total del ciclo</span><span class="v" id="miniTotal">$0.00</span></div>
+          <div class="kv"><span class="k">Pendiente a meta</span><span class="v" id="miniPend">$1,000.00</span></div>
+          <div class="note" id="miniNota">Sin datos suficientes todavía para proyectar.</div>
+          <div class="note" id="oppCostNota" style="display:none;border-left-color:var(--amber);"></div>
+        </div>
+
+        <div class="card" id="streakCard" style="display:none;">
+          <h2>Racha &amp; meta semanal</h2>
+          <div class="kv"><span class="k">Racha actual</span><span class="v" id="streakVal">0 días 🔥</span></div>
+          <div class="kv"><span class="k">Meta semanal</span><span class="v" id="weekGoalVal">0 / 5 días</span></div>
+          <div class="bar green" id="weekGoalBar"><i style="width:0%"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== VISTA: CICLO ===================== -->
+  <section class="view" id="view-ciclo">
+    <div class="card">
+      <h2>Tira del ciclo — estadística vs. probabilidad</h2>
+      <div class="strip-wrap"><div class="strip" id="cicloStrip"></div></div>
+      <div class="legend">
+        <span><i style="background:var(--red)"></i> <span id="legRed">Bajo (&lt;330 min)</span></span>
+        <span><i style="background:var(--amber)"></i> <span id="legAmber">Medio (330–659 min)</span></span>
+        <span><i style="background:var(--green)"></i> <span id="legGreen">Meta (≥660 min)</span></span>
+        <span><i style="background:var(--panel-2);border:1px dashed var(--wire)"></i> Futuro = proyección</span>
+      </div>
+      <div class="note" id="cicloNota">—</div>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="card">
+        <h2>Tiempo — real hasta hoy</h2>
+        <div class="kv"><span class="k">Minutos acumulados</span><span class="v" id="cTiempoMin">0 / 9,240</span></div>
+        <div class="kv"><span class="k">Equivalente en horas</span><span class="v" id="cTiempoHrs">0:00</span></div>
+        <div class="kv"><span class="k">% de avance del ciclo</span><span class="v" id="cTiempoPct">0%</span></div>
+        <div id="perfVizCiclo" style="margin-top:6px;"></div>
+        <div class="note" id="cProyTiempo">—</div>
+      </div>
+      <div class="card">
+        <h2>Dinero — ciclo actual</h2>
+        <div class="kv"><span class="k">Sub total</span><span class="v" id="cSubtotal">$0.00</span></div>
+        <div class="kv"><span class="k">Comisión Deel</span><span class="v" id="cFee">$0.00</span></div>
+        <div class="kv"><span class="k">Total (USD)</span><span class="v" id="cTotal">$0.00</span></div>
+        <div class="kv"><span class="k">Total (HNL)</span><span class="v" id="cTotalHnl">L 0.00</span></div>
+        <div class="kv"><span class="k">Meta</span><span class="v" id="cMeta">$1,000.00</span></div>
+        <div class="kv"><span class="k">Pendiente</span><span class="v" id="cPendiente">$1,000.00</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <h2>Forecast — promedio de los últimos 3 meses</h2>
+      <div class="kv"><span class="k">Días de muestra (con datos)</span><span class="v" id="fcSample">0</span></div>
+      <div class="kv"><span class="k">Promedio diario</span><span class="v" id="fcAvgMin">0 min</span></div>
+      <div class="kv"><span class="k">Promedio diario (USD)</span><span class="v" id="fcAvgUsd">$0.00</span></div>
+      <div class="kv"><span class="k">Proyección de cierre de ciclo</span><span class="v" id="fcProjTotal">$0.00</span></div>
+      <div class="kv"><span class="k">Equivalente (HNL)</span><span class="v" id="fcProjHnl">L 0.00</span></div>
+      <div class="kv"><span class="k">Segmento del día más productivo</span><span class="v" id="fcBestSegment">—</span></div>
+      <div class="kv"><span class="k">Rango proyectado (≈80% confianza)</span><span class="v" id="fcRange">—</span></div>
+      <div class="note" id="fcNota">—</div>
+    </div>
+  </section>
+
+  <!-- ===================== VISTA: REPORTES ===================== -->
+  <section class="view" id="view-reportes">
+    <div class="card">
+      <h2>Comparativo entre ciclos</h2>
+      <div class="compare-wrap" id="compareWrap"><div class="compare" id="compareChart"></div></div>
+      <div class="compare-hint">← Desliza para ver ciclos anteriores</div>
+    </div>
+    <div class="card">
+      <h2>Historial de ciclos</h2>
+      <div class="cycle-list" id="cycleList"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <button class="btn ghost sm" id="cycleListMoreBtn" style="display:none;">Cargar más ciclos ▾</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Estacionalidad — promedio de minutos por día de la semana</h2>
+      <div id="seasonChart"></div>
+      <div class="note" id="seasonNota">—</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="credit">
+  <span id="footerStats">Meta diaria 660 min &middot; Meta de ciclo $1,000 &middot; Tarifa $0.12/min &middot; Comisión Deel 2% (subtotal &lt; $750) o $15 fijo</span> &middot;
+  El histórico se carga manualmente en Ajustes → Importar hoja de cálculo; los datos importados (auditados) reemplazan cualquier registro manual previo de esos días &middot;
+  Datos guardados localmente en este navegador (localStorage) — usa Exportar/Importar en Ajustes para respaldar o mover tu bitácora entre equipos.
+</footer>
+
+<!-- ===================== MODAL: AJUSTES ===================== -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Ajustes</h3>
+    <div class="modal-scroll" id="modalScroll">
+      <div class="field">
+        <label>Tasa de cambio USD → HNL</label>
+        <input type="number" id="cfgRate" step="0.0001">
+      </div>
+      <div class="rate-status" id="rateStatus">—</div>
+      <button class="btn ghost sm" id="btnFetchRate" style="margin-bottom:14px;">↻ Actualizar tasa (bancos HN)</button>
+      <div class="field">
+        <label>Meta diaria (minutos)</label>
+        <input type="number" id="cfgDailyGoal">
+      </div>
+      <div class="field">
+        <label>Tarifa por minuto (USD)</label>
+        <input type="number" id="cfgRatePerMin" step="0.01">
+      </div>
+      <div class="field">
+        <label>Meta de ciclo (USD)</label>
+        <input type="number" id="cfgCycleGoal">
+      </div>
+      <div class="field">
+        <label>Comisión Deel — porcentaje (%)</label>
+        <input type="number" id="cfgFeePct" step="0.1">
+      </div>
+      <div class="field">
+        <label>Comisión Deel — monto fijo (USD)</label>
+        <input type="number" id="cfgFeeFlat" step="0.5">
+      </div>
+      <div class="field">
+        <label>Comisión Deel — aplica % si el subtotal es menor a (USD)</label>
+        <input type="number" id="cfgFeeThreshold" step="1">
+      </div>
+      <div class="field field-highlight">
+        <span class="badge-star">★ Recomendado</span>
+        <label>Importar hoja de cálculo al histórico (CSV / XLSX)</label>
+        <label class="btn ghost sm" style="cursor:pointer;display:inline-block;">Elegir archivo<input type="file" id="fileImportSheet" accept=".csv,.xlsx,.xls" style="display:none;"></label>
+        <div class="rate-status" id="sheetImportStatus">Detecta columnas tipo Fecha/Service Date, Minutos/Quantity, Ganancia/Earnings, Ajuste/Adjustment, Línea de servicio (Audio/Video), Hora de inicio y Agent ID. Los datos importados (auditados) <b>reemplazan</b> cualquier registro manual de esos días.</div>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label>Gráfico por defecto — pestaña Hoy</label>
+        <select id="cfgVizHoy">
+          <option value="bar">▭ Barra</option>
+          <option value="gauge">◐ Medidor</option>
+          <option value="bullet">▤ Bala</option>
+          <option value="lines">📈 Líneas</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Gráfico por defecto — pestaña Ciclo</label>
+        <select id="cfgVizCiclo">
+          <option value="bar">▭ Barra</option>
+          <option value="gauge">◐ Medidor</option>
+          <option value="bullet">▤ Bala</option>
+          <option value="lines">📈 Líneas</option>
+        </select>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label><input type="checkbox" id="cfgStreaksEnabled" style="width:auto;margin-right:6px;">Activar rachas y meta semanal</label>
+        <div class="rate-status">Muestra en "Hoy" tu racha de días consecutivos cumpliendo la meta diaria y tu progreso semanal.</div>
+      </div>
+      <div class="field">
+        <label>Meta semanal (días por semana cumpliendo la meta diaria)</label>
+        <input type="number" id="cfgWeeklyGoalDays" min="1" max="7">
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label><input type="checkbox" id="cfgNotifEnabled" style="width:auto;margin-right:6px;">Activar notificaciones del navegador</label>
+        <button class="btn ghost sm" id="btnNotifPermission" style="margin-top:6px;">🔔 Pedir permiso de notificaciones</button>
+        <div class="rate-status" id="notifPermStatus">—</div>
+      </div>
+      <div class="field" style="margin-left:4px;">
+        <label style="text-transform:none;letter-spacing:0;font-size:11px;"><input type="checkbox" id="cfgNotifDaily" style="width:auto;margin-right:6px;">Aviso al acercarte / superar la meta diaria</label><br>
+        <label style="text-transform:none;letter-spacing:0;font-size:11px;"><input type="checkbox" id="cfgNotifStart" style="width:auto;margin-right:6px;">Aviso al iniciar el día (planificación)</label><br>
+        <label style="text-transform:none;letter-spacing:0;font-size:11px;"><input type="checkbox" id="cfgNotifLowPace" style="width:auto;margin-right:6px;">Alerta de "ritmo bajo" a mitad de día</label>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label>Respaldo en la nube (Google Drive)</label>
+        <div class="rate-status">Requiere un Client ID de OAuth propio (gratis, se crea en Google Cloud Console → APIs &amp; Services → Credentials, tipo "Web application"). Esto es necesario porque la app corre sin servidor; tus datos solo se suben a tu propio Drive.</div>
+        <input type="text" id="cfgDriveClientId" placeholder="Client ID de Google OAuth (termina en .apps.googleusercontent.com)" style="margin-top:8px;width:100%;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn ghost sm" id="btnDriveConnect">🔗 Conectar</button>
+          <button class="btn ghost sm" id="btnDriveBackup">☁ Respaldar ahora</button>
+          <button class="btn ghost sm" id="btnDriveRestore">⤓ Restaurar de Drive</button>
+        </div>
+        <label style="margin-top:8px;display:block;"><input type="checkbox" id="cfgDriveAuto" style="width:auto;margin-right:6px;">Respaldo automático tras cada cambio</label>
+        <div class="rate-status" id="driveStatus">Sin conectar.</div>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label>Restablecer aplicación</label>
+        <button class="btn ghost sm" id="btnReset" style="border-color:#5a3229;color:var(--red);">↺ Restablecer a valores por defecto</button>
+        <div class="rate-status">Borra todo el histórico y restaura: meta diaria 480 min, meta de ciclo $570, tarifa $0.12/min, título "Payment Analysis Propio", barra lineal. No se puede deshacer.</div>
+      </div>
+      <div class="modal-actions" style="justify-content:flex-start;">
+        <button class="btn ghost sm" id="btnViewLog">🐞 Ver log de errores</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost sm" id="btnExport">Exportar JSON</button>
+        <label class="btn ghost sm" style="cursor:pointer;">Importar JSON<input type="file" id="fileImport" accept="application/json" style="display:none;"></label>
+        <button class="btn sm" id="btnSaveCfg">Guardar</button>
+      </div>
+    </div>
+    <div class="modal-scroll-btns">
+      <button type="button" class="modal-scroll-btn" id="modalScrollUp" title="Subir">▲</button>
+      <button type="button" class="modal-scroll-btn" id="modalScrollDown" title="Bajar">▼</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: EDITAR DÍA DEL CICLO ===================== -->
+<div class="modal-bg" id="dayModalBg">
+  <div class="modal">
+    <h3 id="dayModalTitle">Editar día</h3>
+    <div class="entry-form">
+      <input type="number" id="dayInMin" placeholder="min" min="1">
+      <input type="text" id="dayInNota" placeholder="nota (opcional)">
+      <button class="btn sm" id="dayBtnAdd">+ Agregar</button>
+    </div>
+    <div class="entries" id="dayEntries"></div>
+    <div class="modal-actions">
+      <button class="btn ghost sm" id="dayModalClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: DETALLE DE CICLO (Reportes) ===================== -->
+<div class="modal-bg" id="cycleDetailModalBg">
+  <div class="modal" style="max-width:520px;">
+    <h3 id="cycleDetailTitle">Detalle del ciclo</h3>
+    <div class="modal-scroll" id="cycleDetailScroll" style="max-height:min(70vh,560px);overflow-y:auto;padding-right:6px;">
+      <div id="cycleDetailBody"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost sm" id="cycleDetailClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Constantes por defecto (igual que el Excel) ---------- */
+  var DEFAULTS = {
+    title: 'Bitácora de Ciclo',
+    dailyGoal: 660,        // minutos
+    ratePerMin: 0.12,      // USD por minuto
+    cycleGoal: 1000,       // USD meta de ciclo
+    feeThreshold: 750,     // USD
+    feePct: 0.02,
+    feeFlat: 15,
+    exchangeRate: 26.5,    // HNL por USD, respaldo manual
+    exchangeRateSource: '',
+    exchangeRateUpdated: null,
+    vizMode: 'gauge',      // 'bar' | 'gauge' | 'bullet' | 'lines' — pestaña Hoy (medidor por defecto)
+    vizModeCiclo: 'gauge', // idem — pestaña Ciclo (medidor por defecto)
+    agentId: '',           // Agent ID detectado desde la hoja de cálculo importada
+    // ---- Rachas / meta semanal ----
+    streaksEnabled: false,
+    weeklyGoalDays: 5,
+    // ---- Notificaciones ----
+    notifEnabled: false,
+    notifDaily: true,
+    notifStart: true,
+    notifLowPace: true,
+    // ---- Respaldo en la nube (Google Drive) ----
+    driveClientId: '',
+    driveFileId: null,
+    driveLastSync: null,
+    driveAuto: false
+  };
+  var ANCHOR = new Date('2026-05-30T00:00:00'); // sábado de referencia (inicio de ciclo confirmado)
+  var DAY_MS = 86400000;
+  var DAY_LABELS = ['SÁB','DOM','LUN','MAR','MIÉ','JUE','VIE'];
+
+  /* ---------- Estado ---------- */
+  var cfg = loadJSON('bitacora_cfg', DEFAULTS);
+  var entries = loadJSON('bitacora_entries', {}); // { 'YYYY-MM-DD': [{id,min,nota,usd?}, ...] }
+  /* Detalle por llamada (solo se llena al importar hoja de cálculo). Se usa para los
+     desgloses del reporte de ciclo: llamada vs ajuste, audio vs video, segmento del día.
+     { 'YYYY-MM-DD': [{min, usd, adj, line:'Audio'|'Video'|'', hour, segment}, ...] } */
+  var calls = loadJSON('bitacora_calls', {});
+
+  /* Purga única de la carga histórica que traía la app en versiones anteriores
+     (identificada con ids que empiezan en 'hist_'). El usuario prefiere recargar
+     el histórico manualmente con sus propias hojas de cálculo, revisadas por él. */
+  (function purgeLegacySeed(){
+    var done = false;
+    try{ done = localStorage.getItem('bitacora_hist_purge_v1')==='1'; }catch(e){}
+    if(done) return;
+    Object.keys(entries).forEach(function(dISO){
+      var arr = entries[dISO];
+      if(!arr) return;
+      var kept = arr.filter(function(e){ return !(e && e.id && String(e.id).indexOf('hist_')===0); });
+      if(kept.length===0){ delete entries[dISO]; } else { entries[dISO] = kept; }
+    });
+    try{ localStorage.setItem('bitacora_hist_purge_v1','1'); }catch(e){}
+    saveEntries();
+  })();
+
+  function loadJSON(key, fallback){
+    try{
+      var raw = localStorage.getItem(key);
+      if(!raw) return JSON.parse(JSON.stringify(fallback));
+      var parsed = JSON.parse(raw);
+      return Object.assign({}, fallback, parsed);
+    }catch(e){ return JSON.parse(JSON.stringify(fallback)); }
+  }
+  function saveCfg(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); scheduleAutoBackup(); }
+  function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); scheduleAutoBackup(); }
+  function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); scheduleAutoBackup(); }
+
+  /* ---------- Log de errores (item C) ----------
+     Guarda un histórico corto de errores para depuración, sin interrumpir al usuario. */
+  function logError(context, err){
+    try{
+      var log = JSON.parse(localStorage.getItem('bitacora_errlog')||'[]');
+      log.push({t:new Date().toISOString(), ctx:context, msg: (err && err.message) ? err.message : String(err)});
+      if(log.length>100) log = log.slice(log.length-100);
+      localStorage.setItem('bitacora_errlog', JSON.stringify(log));
+    }catch(e){ /* no-op: si ni el log funciona, no hay nada más que hacer */ }
+    if(window.console && console.warn) console.warn('[Bitácora] '+context+':', err);
+  }
+
+  /* ---------- Título editable ---------- */
+  (function initTitle(){
+    var el = document.getElementById('appTitle');
+    var t = cfg.title || DEFAULTS.title;
+    el.textContent = t;
+    document.title = t + ' — Rendimiento Diario';
+    el.addEventListener('keydown', function(e){
+      if(e.key==='Enter'){ e.preventDefault(); el.blur(); }
+    });
+    el.addEventListener('blur', function(){
+      var val = el.textContent.replace(/\s+/g,' ').trim() || DEFAULTS.title;
+      el.textContent = val;
+      cfg.title = val;
+      saveCfg();
+      document.title = val + ' — Rendimiento Diario';
+    });
+  })();
+
+  /* ---------- Zonas horarias ---------- */
+  /* Los "días" del ciclo se determinan por la fecha calendario en Central Time
+     (America/Chicago, con DST automático), NO por la hora de Honduras (fija GMT-6).
+     Esto importa cerca de medianoche: cuando Central está en horario de verano (CDT,
+     UTC-5) va una hora adelante de Honduras, así que el día de ciclo puede cambiar
+     antes de la medianoche en el reloj de Honduras. */
+  function centralISODate(now){
+    return new Intl.DateTimeFormat('en-CA', {timeZone:'America/Chicago', year:'numeric', month:'2-digit', day:'2-digit'}).format(now);
+  }
+  function zoneParts(now, timeZone){
+    var dateFmt = new Intl.DateTimeFormat('es-HN', {timeZone:timeZone, weekday:'short', day:'2-digit', month:'short'});
+    var timeFmt = new Intl.DateTimeFormat('en-US', {timeZone:timeZone, hour:'2-digit', minute:'2-digit', hour12:true});
+    var tzFmt = new Intl.DateTimeFormat('en-US', {timeZone:timeZone, timeZoneName:'short'});
+    var parts = tzFmt.formatToParts(now).find(function(p){return p.type==='timeZoneName';});
+    return {date:dateFmt.format(now), time:timeFmt.format(now), tz: parts?parts.value:''};
+  }
+
+  /* ---------- Utilidades de fecha / ciclo ---------- */
+  function iso(d){
+    // Usa componentes locales (no toISOString) para evitar corrimientos por huso horario.
+    var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+day;
+  }
+  function todayDate(){
+    // "Hoy" siempre es la fecha calendario en Central Time, sin importar el huso
+    // horario del navegador de quien abre la app.
+    var p = centralISODate(new Date()).split('-').map(Number);
+    return new Date(p[0], p[1]-1, p[2]);
+  }
+  function cycleStartFor(date){
+    var diffDays = Math.floor((date - ANCHOR)/DAY_MS);
+    var cycleIndex = Math.floor(diffDays/14);
+    return new Date(ANCHOR.getTime() + cycleIndex*14*DAY_MS);
+  }
+  function dayIndexInCycle(date, start){ return Math.floor((date-start)/DAY_MS)+1; } // 1..14
+  function fmtDateEs(d){
+    return d.toLocaleDateString('es-HN',{weekday:'long', day:'numeric', month:'short'});
+  }
+  function fmtMoney(n){ return '$' + (n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtHNL(n){ return 'L ' + (n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtHrs(min){
+    min = Math.round(min||0);
+    var h = Math.floor(min/60), m = min%60;
+    return h + ':' + String(m).padStart(2,'0');
+  }
+  function minutesForDate(dISO){
+    var arr = entries[dISO]||[];
+    return arr.reduce(function(s,e){return s+Number(e.min||0);},0);
+  }
+  /* Usa el USD real de la entrada (importado del portal) si existe;
+     si no, calcula con minutos * tarifa (entradas manuales nuevas). */
+  function usdForEntry(e){
+    return (e.usd!==undefined && e.usd!==null) ? Number(e.usd) : Number(e.min||0)*cfg.ratePerMin;
+  }
+  function usdForDate(dISO){
+    var arr = entries[dISO]||[];
+    return arr.reduce(function(s,e){return s+usdForEntry(e);},0);
+  }
+  function statusOf(min, goal){
+    if(min >= goal) return 'green';
+    if(min >= goal/2) return 'amber';
+    return 'red';
+  }
+
+  /* ---------- Item A: Rachas y meta semanal ---------- */
+  function computeStreak(){
+    var d = todayDate();
+    var cur = new Date(d.getTime());
+    var todayMin = minutesForDate(iso(d));
+    // el día de hoy en curso no rompe la racha todavía; se cuenta desde ayer si hoy aún no cumple
+    if(todayMin < cfg.dailyGoal) cur.setTime(cur.getTime()-DAY_MS);
+    var streak = 0, guard = 0;
+    while(guard<3650){
+      var m = minutesForDate(iso(cur));
+      if(m >= cfg.dailyGoal){ streak++; cur.setTime(cur.getTime()-DAY_MS); guard++; }
+      else break;
+    }
+    // si hoy sí cumplió, se suma
+    if(todayMin >= cfg.dailyGoal) streak++;
+    return streak;
+  }
+  function computeWeekProgress(){
+    var d = todayDate();
+    var dow = d.getDay(); // 0=dom..6=sáb
+    var mondayOffset = (dow===0?6:dow-1);
+    var monday = new Date(d.getTime()-mondayOffset*DAY_MS);
+    var count = 0;
+    for(var i=0;i<7;i++){
+      var day = new Date(monday.getTime()+i*DAY_MS);
+      if(day>d) break;
+      if(minutesForDate(iso(day)) >= cfg.dailyGoal) count++;
+    }
+    return {count:count, goal:cfg.weeklyGoalDays||5};
+  }
+  function renderStreakCard(){
+    var card = document.getElementById('streakCard');
+    if(!cfg.streaksEnabled){ card.style.display='none'; return; }
+    card.style.display='block';
+    var streak = computeStreak();
+    document.getElementById('streakVal').textContent = streak+(streak===1?' día':' días')+(streak>0?' 🔥':'');
+    var wp = computeWeekProgress();
+    document.getElementById('weekGoalVal').textContent = wp.count+' / '+wp.goal+' días';
+    var pct = wp.goal>0 ? Math.min(100,(wp.count/wp.goal)*100) : 0;
+    var bar = document.getElementById('weekGoalBar');
+    bar.className = 'bar '+(wp.count>=wp.goal?'green':wp.count>=wp.goal/2?'amber':'red');
+    bar.querySelector('i').style.width = pct+'%';
+  }
+
+  /* ---------- Item B: Notificaciones ---------- */
+  function notifState(){
+    var today = iso(todayDate());
+    var st;
+    try{ st = JSON.parse(localStorage.getItem('bitacora_notif_state')||'{}'); }catch(e){ st = {}; }
+    if(st.date !== today){ st = {date:today}; }
+    return st;
+  }
+  function saveNotifState(st){
+    try{ localStorage.setItem('bitacora_notif_state', JSON.stringify(st)); }catch(e){ logError('saveNotifState', e); }
+  }
+  function fireNotification(title, body){
+    try{
+      if(window.Notification && Notification.permission==='granted'){
+        new Notification(title, {body:body, icon:undefined, tag:'bitacora-'+title});
+      }
+    }catch(e){ logError('fireNotification', e); }
+  }
+  function renderNotifPermStatus(){
+    var el = document.getElementById('notifPermStatus');
+    if(!el) return;
+    if(!window.Notification){ el.textContent = 'Este navegador no soporta notificaciones.'; return; }
+    var map = {granted:'Permiso concedido ✓', denied:'Permiso denegado — actívalo desde los ajustes del navegador.', default:'Aún no se ha pedido permiso.'};
+    el.textContent = map[Notification.permission] || '—';
+  }
+  var btnNotifPermEl = document.getElementById('btnNotifPermission');
+  if(btnNotifPermEl){
+    btnNotifPermEl.addEventListener('click', function(){
+      if(!window.Notification){ alert('Este navegador no soporta notificaciones.'); return; }
+      Notification.requestPermission().then(function(){ renderNotifPermStatus(); });
+    });
+  }
+  /* Revisa y dispara, como máximo una vez por tipo por día, los avisos configurados.
+     Se llama desde renderHoy(), así que depende de que la pestaña/app esté abierta —
+     sin un servidor de push no es posible notificar con la app completamente cerrada. */
+  function checkAndNotify(min, goal, dISO){
+    if(!cfg.notifEnabled || !window.Notification || Notification.permission!=='granted') return;
+    var st = notifState();
+    var changed = false;
+
+    if(cfg.notifStart && !st.startSent){
+      fireNotification('Bitácora — nuevo día', 'Planifica tu día: meta de '+goal+' min. ¡Vamos!');
+      st.startSent = true; changed = true;
+    }
+    if(cfg.notifDaily){
+      var remaining = goal-min;
+      if(min>=goal && !st.goalSent){
+        fireNotification('¡Meta diaria cumplida! 🎯', 'Llevas '+min+' de '+goal+' min. Buen trabajo.');
+        st.goalSent = true; changed = true;
+      } else if(remaining>0 && remaining<=30 && !st.almostSent){
+        fireNotification('Ya casi llegas', 'Te faltan '+remaining+' min para tu meta diaria.');
+        st.almostSent = true; changed = true;
+      }
+    }
+    if(cfg.notifLowPace && !st.lowPaceSent){
+      // "mitad del día" se aproxima con la hora local de Honduras: si ya es mediodía
+      // y no se ha llegado al 50% de la meta, se dispara la alerta.
+      var hnHour = Number(new Intl.DateTimeFormat('en-US',{timeZone:'America/Tegucigalpa',hour:'2-digit',hour12:false}).format(new Date()));
+      if(hnHour>=12 && min < goal/2){
+        fireNotification('Ritmo bajo ⚠', 'Vas a mitad de día con menos del 50% de tu meta diaria ('+min+'/'+goal+' min).');
+        st.lowPaceSent = true; changed = true;
+      }
+    }
+    if(changed) saveNotifState(st);
+  }
+
+  /* ---------- Segmentos del día (req. 3c) ----------
+     Mañana 6:00–12:00 · Tarde 12:00–18:00 · Noche 18:00–00:00 · Madrugada 00:00–6:00 */
+  var DAY_SEGMENTS = ['Mañana','Tarde','Noche','Madrugada'];
+  function segmentOfHour(h){
+    if(h>=6 && h<12) return 'Mañana';
+    if(h>=12 && h<18) return 'Tarde';
+    if(h>=18 && h<24) return 'Noche';
+    return 'Madrugada';
+  }
+  function parseHour12(str){
+    var s = String(str||'').trim();
+    var m = s.match(/^(\d{1,2}):(\d{2})\s*([AP]M)/i);
+    if(!m) return null;
+    var h = parseInt(m[1],10) % 12;
+    if(/PM/i.test(m[3])) h += 12;
+    return h;
+  }
+  function callsForDate(dISO){ return calls[dISO]||[]; }
+
+  /* ---------- Reloj (dos zonas) ---------- */
+  function tickClock(){
+    var now = new Date();
+    var hn = zoneParts(now, 'America/Tegucigalpa');
+    var ct = zoneParts(now, 'America/Chicago');
+    document.getElementById('clockBox').innerHTML =
+      '<b>HN</b> '+hn.date+' &middot; '+hn.time+'<br>'+
+      '<b>CT</b> ('+ct.tz+') '+ct.date+' &middot; '+ct.time;
+  }
+  tickClock(); setInterval(tickClock, 15000);
+
+  /* ---------- Tasa de cambio oficial: bancos locales de Honduras, valor de COMPRA ----------
+     Fuentes: Ficohsa, Banpaís y Banco de Occidente (páginas públicas con la tasa en texto plano).
+     BAC no expone una página estática con la tasa (queda detrás de banca en línea), así que no
+     se puede leer automáticamente; queda como fuente de referencia manual.
+     Se leen vía un proxy CORS porque los bancos no habilitan peticiones cruzadas desde un archivo
+     local. Si ninguna fuente responde, se usa una referencia de mercado; si tampoco hay conexión,
+     se conserva la última tasa guardada (requisito de continuidad sin internet). */
+  var BANK_SOURCES = [
+    {name:'Ficohsa', url:'https://www.ficohsa.hn/tasas-de-cambio', parse:function(t){
+      var m = t.match(/D[oó]lar[\s\S]{0,25}?Compra[\s\S]{0,15}?([\d]+\.[\d]{2,4})/i) || t.match(/Compra[\s\S]{0,15}?([\d]+\.[\d]{2,4})/i);
+      return m ? parseFloat(m[1]) : null;
+    }},
+    {name:'Banpaís', url:'https://www.banpais.hn/divisas/barradolar.php', parse:function(t){
+      var m = t.match(/Compra:?\s*([\d]+\.[\d]{2,4})/i);
+      return m ? parseFloat(m[1]) : null;
+    }},
+    {name:'Banco de Occidente', url:'https://www.bancodeoccidente.hn/banca-personas/internacional/divisas-personas', parse:function(t){
+      // La página lista los encabezados "Venta · Compra" y luego, en ese mismo orden, los dos valores del día.
+      var m = t.match(/Hoy\D{0,12}?([\d]+\.[\d]{2,4})\D{0,12}?([\d]+\.[\d]{2,4})/i);
+      return m ? parseFloat(m[2]) : null;
+    }}
+  ];
+  function stripHtml(html){
+    return String(html)
+      .replace(/<script[\s\S]*?<\/script>/gi,' ')
+      .replace(/<style[\s\S]*?<\/style>/gi,' ')
+      .replace(/<[^>]+>/g,' ')
+      .replace(/&nbsp;/gi,' ').replace(/&middot;/gi,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  /* Dos proxies CORS de respaldo (item H): si el primero falla o cambia de política,
+     se reintenta automáticamente con el segundo antes de rendirse en esa fuente. */
+  var CORS_PROXIES = [
+    function(url){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(url)+'&t='+Date.now(); },
+    function(url){ return 'https://corsproxy.io/?url='+encodeURIComponent(url)+'&t='+Date.now(); }
+  ];
+  function fetchViaProxy(proxyFn, url){
+    return fetch(proxyFn(url), {cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('http'); return r.text(); });
+  }
+  function fetchBankRate(source){
+    return fetchViaProxy(CORS_PROXIES[0], source.url).catch(function(){
+      logError('fetchBankRate:proxy1:'+source.name, 'fallback a proxy 2');
+      return fetchViaProxy(CORS_PROXIES[1], source.url);
+    }).then(function(html){
+      var val = source.parse(stripHtml(html));
+      if(!val || val<15 || val>45) throw new Error('parse'); // fuera de rango razonable USD/HNL
+      return {name:source.name, rate:val};
+    }).catch(function(err){
+      logError('fetchBankRate:'+source.name, err);
+      throw err;
+    });
+  }
+  function fmtUpdated(isoStr){
+    try{
+      var d = new Date(isoStr);
+      return d.toLocaleDateString('es-HN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-HN',{hour:'2-digit',minute:'2-digit'});
+    }catch(e){ return ''; }
+  }
+  /* Frescura de la tasa (item H): colorea el texto según qué tan vieja es. */
+  function rateStaleDays(){
+    if(!cfg.exchangeRateUpdated) return null;
+    try{ return (Date.now() - new Date(cfg.exchangeRateUpdated).getTime())/DAY_MS; }catch(e){ return null; }
+  }
+  function renderRateStatusText(el){
+    if(!el) return;
+    el.classList.remove('stale','very-stale');
+    var days = rateStaleDays();
+    var base = cfg.exchangeRateSource
+      ? 'Última tasa: '+cfg.exchangeRate.toFixed(4)+' HNL — '+cfg.exchangeRateSource+(cfg.exchangeRateUpdated ? ' ('+fmtUpdated(cfg.exchangeRateUpdated)+')' : '')
+      : 'Tasa manual guardada. Se actualiza automáticamente al abrir la app.';
+    if(days!==null && days>7){ el.classList.add('very-stale'); base += ' ⚠ Desactualizada hace más de 7 días.'; }
+    else if(days!==null && days>2){ el.classList.add('stale'); base += ' ⚠ Sin actualizar hace '+Math.floor(days)+' día(s).'; }
+    el.textContent = base;
+  }
+  function updateExchangeRateAuto(statusEl, force){
+    statusEl = statusEl || document.getElementById('rateStatus');
+    // item J: si ya se actualizó hoy (mismo día calendario Central), no se vuelve a consultar
+    // en cada carga — solo una vez al día automáticamente, salvo que se fuerce manualmente.
+    if(!force && cfg.exchangeRateUpdated){
+      var lastDay = centralISODate(new Date(cfg.exchangeRateUpdated));
+      if(lastDay === centralISODate(new Date())){
+        if(statusEl) renderRateStatusText(statusEl);
+        return;
+      }
+    }
+    if(statusEl) statusEl.textContent = 'Consultando tasa de compra en bancos locales (Ficohsa, Banpaís, Banco de Occidente)…';
+    var attempts = BANK_SOURCES.map(function(s){ return fetchBankRate(s).catch(function(){ return null; }); });
+    Promise.all(attempts).then(function(results){
+      var ok = results.filter(Boolean);
+      if(ok.length>0){
+        var avg = ok.reduce(function(s,r){return s+r.rate;},0)/ok.length;
+        cfg.exchangeRate = Math.round(avg*10000)/10000;
+        cfg.exchangeRateSource = ok.map(function(r){return r.name;}).join(' · ');
+        cfg.exchangeRateUpdated = new Date().toISOString();
+        saveCfg();
+        var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
+        if(statusEl) statusEl.textContent = 'Tasa de compra: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL — fuentes: '+cfg.exchangeRateSource+' ('+fmtUpdated(cfg.exchangeRateUpdated)+').';
+        renderAll();
+      } else {
+        fetch('https://open.er-api.com/v6/latest/USD').then(function(r){ return r.json(); }).then(function(data){
+          if(data && data.rates && data.rates.HNL){
+            cfg.exchangeRate = data.rates.HNL;
+            cfg.exchangeRateSource = 'Referencia de mercado (bancos locales no disponibles)';
+            cfg.exchangeRateUpdated = new Date().toISOString();
+            saveCfg();
+            var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
+            if(statusEl) statusEl.textContent = 'Bancos locales no disponibles. Usando referencia de mercado: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL.';
+            renderAll();
+          } else { throw new Error('sin datos'); }
+        }).catch(function(){
+          if(statusEl) statusEl.textContent = 'Sin conexión a ninguna fuente. Se mantiene la última tasa guardada: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL'+(cfg.exchangeRateUpdated ? ' (actualizada '+fmtUpdated(cfg.exchangeRateUpdated)+')' : '')+'.';
+        });
+      }
+    });
+  }
+
+  /* ---------- Tabs ---------- */
+  document.querySelectorAll('nav.tabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('nav.tabs button').forEach(function(b){b.classList.remove('active');});
+      document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+      btn.classList.add('active');
+      document.getElementById('view-'+btn.dataset.view).classList.add('active');
+      if(btn.dataset.view==='ciclo') renderCiclo();
+      if(btn.dataset.view==='reportes'){ reportsShown = REPORTS_PAGE_SIZE; renderReportes(); }
+    });
+  });
+
+  /* ---------- Temporizador / Modo concentración (visible en todas las pestañas) ---------- */
+  (function initFocusTimer(){
+    var mode = 'down';           // 'down' = cuenta regresiva, 'up' = cuenta progresiva
+    var running = false;
+    var targetMinutes = 25;
+    var remaining = targetMinutes*60; // segundos, cuenta regresiva
+    var elapsed = 0;                  // segundos, cuenta progresiva
+    var timerHandle = null;
+
+    var widget = document.getElementById('focusWidget');
+    var dot = document.getElementById('fwDot');
+    var label = document.getElementById('fwLabel');
+    var timeEl = document.getElementById('fwTime');
+    var setRow = document.getElementById('fwSetRow');
+    var minutesInput = document.getElementById('fwMinutesInput');
+
+    function fmtTimer(totalSeconds){
+      totalSeconds = Math.max(0, Math.round(totalSeconds));
+      var h = Math.floor(totalSeconds/3600);
+      var m = Math.floor((totalSeconds%3600)/60);
+      var s = totalSeconds%60;
+      return h>0 ? (h+':'+pad2(m)+':'+pad2(s)) : (pad2(m)+':'+pad2(s));
+    }
+    function updateDisplay(){
+      timeEl.textContent = fmtTimer(mode==='down' ? remaining : elapsed);
+      if(running){
+        label.textContent = 'Modo concentración';
+        dot.classList.add('live'); widget.classList.add('live');
+      } else {
+        label.textContent = 'Temporizador';
+        dot.classList.remove('live'); widget.classList.remove('live');
+      }
+    }
+    function tick(){
+      if(mode==='down'){
+        remaining -= 1;
+        if(remaining<=0){ remaining = 0; updateDisplay(); finish(); return; }
+      } else {
+        elapsed += 1;
+      }
+      updateDisplay();
+    }
+    function finish(){
+      running = false;
+      clearInterval(timerHandle);
+      label.textContent = '¡Tiempo cumplido!';
+      dot.classList.remove('live'); widget.classList.remove('live');
+      try{
+        var Ctx = window.AudioContext||window.webkitAudioContext;
+        if(Ctx){
+          var ctx = new Ctx();
+          [0,1].forEach(function(i){
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+            g.gain.value = 0.15;
+            o.start(ctx.currentTime + i*0.35);
+            o.stop(ctx.currentTime + i*0.35 + 0.28);
+          });
+        }
+      }catch(e){}
+    }
+    function start(){
+      if(running) return;
+      if(mode==='down' && remaining<=0) remaining = targetMinutes*60;
+      running = true;
+      timerHandle = setInterval(tick, 1000);
+      updateDisplay();
+    }
+    function pause(){
+      running = false;
+      clearInterval(timerHandle);
+      updateDisplay();
+    }
+    function reset(){
+      pause();
+      if(mode==='down'){ remaining = targetMinutes*60; } else { elapsed = 0; }
+      updateDisplay();
+    }
+
+    document.getElementById('fwModeDown').addEventListener('click', function(){ setMode('down'); });
+    document.getElementById('fwModeUp').addEventListener('click', function(){ setMode('up'); });
+    function setMode(m){
+      mode = m;
+      document.getElementById('fwModeDown').classList.toggle('active', m==='down');
+      document.getElementById('fwModeUp').classList.toggle('active', m==='up');
+      setRow.style.display = m==='down' ? 'flex' : 'none';
+      pause();
+      if(m==='down'){ remaining = targetMinutes*60; } else { elapsed = 0; }
+      updateDisplay();
+    }
+    document.getElementById('fwSetBtn').addEventListener('click', function(){
+      var mnt = Number(minutesInput.value);
+      if(mnt>0){ targetMinutes = mnt; remaining = mnt*60; updateDisplay(); }
+    });
+    document.getElementById('fwStart').addEventListener('click', start);
+    document.getElementById('fwPause').addEventListener('click', pause);
+    document.getElementById('fwReset').addEventListener('click', reset);
+    document.getElementById('fwCollapse').addEventListener('click', function(){
+      var body = document.getElementById('fwBody');
+      var willHide = body.style.display !== 'none';
+      body.style.display = willHide ? 'none' : 'block';
+      document.getElementById('fwCollapse').textContent = willHide ? '▸' : '▾';
+    });
+
+    updateDisplay();
+  })();
+
+  /* ---------- Calendario flotante (resalta el ciclo actual y hoy) ---------- */
+  (function initCalendarWidget(){
+    var DOW = ['D','L','M','M','J','V','S'];
+    var MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    var today = todayDate();
+    var cycleStart = cycleStartFor(today);
+    var cycleEnd = new Date(cycleStart.getTime()+13*DAY_MS);
+    var viewYear = today.getFullYear();
+    var viewMonth = today.getMonth(); // 0-indexed
+
+    function inRange(d, start, end){
+      return d.getTime()>=start.getTime() && d.getTime()<=end.getTime();
+    }
+    function buildMonthCells(year, month){
+      var firstOfMonth = new Date(year, month, 1);
+      var startWeekday = firstOfMonth.getDay(); // 0=Dom
+      var daysInMonth = new Date(year, month+1, 0).getDate();
+      var daysInPrevMonth = new Date(year, month, 0).getDate();
+      var cells = [];
+      for(var i=0;i<startWeekday;i++){
+        var dayNum = daysInPrevMonth - startWeekday + 1 + i;
+        cells.push({date:new Date(year, month-1, dayNum), inMonth:false});
+      }
+      for(var d=1; d<=daysInMonth; d++){
+        cells.push({date:new Date(year, month, d), inMonth:true});
+      }
+      var nextIdx = 1;
+      while(cells.length % 7 !== 0){
+        cells.push({date:new Date(year, month+1, nextIdx), inMonth:false});
+        nextIdx++;
+      }
+      return cells;
+    }
+    function render(){
+      document.getElementById('calMonthLabel').textContent = MONTH_NAMES[viewMonth]+' '+viewYear;
+      var grid = document.getElementById('calGrid');
+      grid.innerHTML='';
+      DOW.forEach(function(l){
+        var el = document.createElement('div');
+        el.className='cal-dow'; el.textContent=l;
+        grid.appendChild(el);
+      });
+      var cells = buildMonthCells(viewYear, viewMonth);
+      cells.forEach(function(c){
+        var el = document.createElement('div');
+        var cls = 'cal-day';
+        if(!c.inMonth) cls += ' other-month';
+        if(inRange(c.date, cycleStart, cycleEnd)) cls += ' in-cycle';
+        if(iso(c.date)===iso(today)) cls += ' today';
+        el.className = cls;
+        el.textContent = c.date.getDate();
+        el.title = c.date.toLocaleDateString('es-HN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+        grid.appendChild(el);
+      });
+    }
+    document.getElementById('calPrev').addEventListener('click', function(){
+      viewMonth--; if(viewMonth<0){ viewMonth=11; viewYear--; }
+      render();
+    });
+    document.getElementById('calNext').addEventListener('click', function(){
+      viewMonth++; if(viewMonth>11){ viewMonth=0; viewYear++; }
+      render();
+    });
+    document.getElementById('calCollapse').addEventListener('click', function(){
+      var body = document.getElementById('calBody');
+      var willHide = body.style.display !== 'none';
+      body.style.display = willHide ? 'none' : 'block';
+      document.getElementById('calCollapse').textContent = willHide ? '▸' : '▾';
+    });
+    render();
+  })();
+
+  /* ---------- Modos de visualización del rendimiento (req. 7) ---------- */
+  var VIZ_COLORS = {red:'#e0523f', amber:'#d9a441', green:'#7fb241', ink:'#eef0e6', faint:'#5c6350'};
+
+  function renderPerfViz(boxId, target, min, goal, status, linePoints){
+    var box = document.getElementById(boxId);
+    if(!box) return;
+    var pct = goal>0 ? (min/goal)*100 : 0;
+    var color = VIZ_COLORS[status];
+    var mode = (target==='ciclo' ? cfg.vizModeCiclo : cfg.vizMode) || 'bar';
+    document.querySelectorAll('.viz-mode-btn[data-target="'+target+'"]').forEach(function(b){ b.classList.toggle('active', b.dataset.mode===mode); });
+
+    if(mode==='bar'){
+      box.innerHTML = '<div class="bar '+status+'"><span class="mark50"></span><i style="width:'+Math.min(100,pct)+'%"></i></div>';
+      return;
+    }
+
+    if(mode==='gauge'){
+      var cx=110, cy=112, r=84;
+      function ptG(v){ var a=(180-v)*Math.PI/180; return [cx+r*Math.cos(a), cy-r*Math.sin(a)]; }
+      function arcPath(v0,v1){
+        var p0=ptG(v0), p1=ptG(v1), large=(v1-v0)>180?1:0;
+        return 'M '+p0[0].toFixed(1)+' '+p0[1].toFixed(1)+' A '+r+' '+r+' 0 '+large+' 1 '+p1[0].toFixed(1)+' '+p1[1].toFixed(1);
+      }
+      var pctClamped = Math.max(0, Math.min(130, pct));
+      var np = ptG((pctClamped/130)*180);
+      box.innerHTML =
+        '<svg viewBox="0 0 220 140">'+
+          '<path d="'+arcPath(0,60)+'" stroke="'+VIZ_COLORS.red+'" stroke-width="18" fill="none" stroke-linecap="round"/>'+
+          '<path d="'+arcPath(60,120)+'" stroke="'+VIZ_COLORS.amber+'" stroke-width="18" fill="none" stroke-linecap="round"/>'+
+          '<path d="'+arcPath(120,180)+'" stroke="'+VIZ_COLORS.green+'" stroke-width="18" fill="none" stroke-linecap="round"/>'+
+          '<line x1="'+cx+'" y1="'+cy+'" x2="'+np[0].toFixed(1)+'" y2="'+np[1].toFixed(1)+'" stroke="'+VIZ_COLORS.ink+'" stroke-width="3" stroke-linecap="round"/>'+
+          '<circle cx="'+cx+'" cy="'+cy+'" r="6" fill="'+VIZ_COLORS.ink+'"/>'+
+          '<text x="'+cx+'" y="'+(cy-40)+'" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="22" font-weight="700" fill="'+color+'">'+Math.round(pct)+'%</text>'+
+        '</svg>';
+      return;
+    }
+
+    if(mode==='bullet'){
+      var scaleMax = 130;
+      function xOf(p){ return (Math.min(p,scaleMax)/scaleMax)*100*4; }
+      box.innerHTML =
+        '<svg viewBox="0 0 400 46" preserveAspectRatio="none" style="height:46px;">'+
+          '<rect x="0" y="14" width="'+xOf(50)+'" height="18" fill="'+VIZ_COLORS.red+'" opacity="0.35"/>'+
+          '<rect x="'+xOf(50)+'" y="14" width="'+(xOf(100)-xOf(50))+'" height="18" fill="'+VIZ_COLORS.amber+'" opacity="0.35"/>'+
+          '<rect x="'+xOf(100)+'" y="14" width="'+(xOf(scaleMax)-xOf(100))+'" height="18" fill="'+VIZ_COLORS.green+'" opacity="0.35"/>'+
+          '<rect x="0" y="19" width="'+xOf(pct)+'" height="8" fill="'+color+'"/>'+
+          '<line x1="'+xOf(100)+'" y1="8" x2="'+xOf(100)+'" y2="38" stroke="'+VIZ_COLORS.ink+'" stroke-width="2"/>'+
+        '</svg>';
+      return;
+    }
+
+    if(mode==='lines'){
+      var pts = (linePoints && linePoints.length) ? linePoints.slice() : [0];
+      var maxY = Math.max(goal, pts[pts.length-1])*1.05;
+      var W=380, H=100, padL=6, padR=6, padT=8, padB=8;
+      function xAt(i){ return padL + (pts.length<=1 ? 0 : (i/(pts.length-1))*(W-padL-padR)); }
+      function yAt(v){ return padT + (1-(v/maxY))*(H-padT-padB); }
+      var pathD = pts.map(function(v,i){ return (i===0?'M ':'L ')+xAt(i).toFixed(1)+' '+yAt(v).toFixed(1); }).join(' ');
+      var goalY = yAt(goal).toFixed(1);
+      box.innerHTML =
+        '<svg viewBox="0 0 '+W+' '+(H+16)+'">'+
+          '<line x1="'+padL+'" y1="'+goalY+'" x2="'+(W-padR)+'" y2="'+goalY+'" stroke="'+VIZ_COLORS.faint+'" stroke-width="1.5" stroke-dasharray="4,3"/>'+
+          '<text x="'+(W-padR)+'" y="'+(Number(goalY)-4)+'" text-anchor="end" font-size="9" fill="'+VIZ_COLORS.faint+'">meta '+goal+' min</text>'+
+          '<path d="'+pathD+'" fill="none" stroke="'+color+'" stroke-width="2.5"/>'+
+          pts.map(function(v,i){ return '<circle cx="'+xAt(i).toFixed(1)+'" cy="'+yAt(v).toFixed(1)+'" r="3" fill="'+color+'"/>'; }).join('')+
+        '</svg>';
+      return;
+    }
+  }
+
+  /* ---------- Vista HOY ---------- */
+  function renderHoy(){
+    var today = todayDate();
+    var dISO = iso(today);
+    var start = cycleStartFor(today);
+    var dayIdx = dayIndexInCycle(today, start);
+    var min = minutesForDate(dISO);
+    var goal = cfg.dailyGoal;
+    var pct = Math.min(100, Math.round((min/goal)*100));
+    var status = statusOf(min, goal);
+
+    document.getElementById('hoyEyebrow').textContent = 'Día '+dayIdx+' de 14 · Ciclo '+fmtRangeShort(start);
+    document.getElementById('hoyTitulo').textContent = capitalize(fmtDateEs(today));
+    document.getElementById('hoySub').textContent = 'Lo ya trabajado hoy es dato real; el resto del ciclo es proyección.';
+
+    var pill = document.getElementById('hoyPill');
+    pill.className = 'pill '+status;
+    document.getElementById('hoyPillText').textContent = status==='green' ? 'Meta cumplida' : status==='amber' ? 'En progreso' : 'Bajo ritmo';
+
+    document.getElementById('hoyMin').innerHTML = min + ' <small>/ '+goal+' min</small>';
+    document.getElementById('hoyHoras').textContent = fmtHrs(min) + ' h de ' + fmtHrs(goal) + ' h';
+    var hoyPts = [], hoyRunning = 0;
+    (entries[dISO]||[]).forEach(function(e){ hoyRunning += Number(e.min||0); hoyPts.push(hoyRunning); });
+    renderPerfViz('perfViz', 'hoy', min, goal, status, hoyPts);
+    document.getElementById('hoyPct').textContent = pct+'%';
+    document.getElementById('hoyResta').textContent = Math.max(0, goal-min);
+
+    var usd = usdForDate(dISO);
+    document.getElementById('hoyUsd').textContent = fmtMoney(usd);
+    document.getElementById('hoyHnl').textContent = fmtHNL(usd*cfg.exchangeRate);
+    document.getElementById('hoyTasa').textContent = '1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL'+(cfg.exchangeRateSource ? ' ('+cfg.exchangeRateSource+')' : '');
+
+    // entradas del día
+    var list = entries[dISO]||[];
+    var box = document.getElementById('hoyEntries');
+    box.innerHTML='';
+    if(list.length===0){
+      box.innerHTML = '<div class="empty">Aún no registras minutos hoy. Agrega tu primera entrada arriba.</div>';
+    }else{
+      list.slice().reverse().forEach(function(e){
+        var row = document.createElement('div');
+        row.className='entry-row';
+        var amtTxt = e.min+' min'+(e.usd!==undefined ? ' · '+fmtMoney(usdForEntry(e)) : '');
+        row.innerHTML = '<span class="l">'+(e.nota? e.nota : 'sesión')+'</span>'+
+          '<span><span class="amt">'+amtTxt+'</span> &nbsp; <button data-id="'+e.id+'" title="Eliminar">✕</button></span>';
+        box.appendChild(row);
+      });
+      box.querySelectorAll('button[data-id]').forEach(function(b){
+        b.addEventListener('click', function(){
+          entries[dISO] = entries[dISO].filter(function(e){return e.id!==b.dataset.id;});
+          saveEntries(); renderAll();
+        });
+      });
+    }
+
+    // mini panel de ciclo
+    var stats = cycleStats(start);
+    document.getElementById('miniDia').textContent = dayIdx+' / 14';
+    document.getElementById('miniTotal').textContent = fmtMoney(stats.total);
+    document.getElementById('miniPend').textContent = fmtMoney(Math.max(0,stats.pendiente));
+    document.getElementById('miniNota').innerHTML = dynamicProjectionMessage(stats);
+
+    // item G: costo de oportunidad
+    var oppEl = document.getElementById('oppCostNota');
+    if(min < goal){
+      var oppCost = (goal-min)*cfg.ratePerMin;
+      oppEl.style.display='block';
+      oppEl.innerHTML = 'Si el día terminara ahora, dejarías de ganar aprox. <b>'+fmtMoney(oppCost)+'</b> respecto a tu meta diaria (antes de comisión).';
+    } else {
+      oppEl.style.display='none';
+    }
+
+    renderStreakCard();
+    checkAndNotify(min, goal, dISO);
+  }
+
+  /* ---------- Item M: mensaje de proyección de cierre de ciclo, dinámico ---------- */
+  function dynamicProjectionMessage(stats){
+    if(stats.daysWithData<1) return 'Sin datos suficientes todavía para proyectar.';
+    var msg = 'Ritmo promedio: <b>'+Math.round(stats.avgMin)+' min/día</b>. Si se mantiene, el ciclo cerraría el día 14 con <b>'+fmtMoney(stats.projTotal)+'</b> ('+Math.round(stats.projPctGoal)+'% de la meta).';
+    if(stats.projTotal < cfg.cycleGoal && stats.avgMin>0){
+      var neededAvg = stats.total>=cfg.cycleGoal ? stats.avgMin : null;
+      // minutos/día promedio necesarios en TODO el ciclo para llegar a la meta (aprox., ignorando el escalón de comisión)
+      var neededTotalMin = (cfg.cycleGoal / Math.max(0.0001, cfg.ratePerMin));
+      var neededMinPerDay = neededTotalMin/14;
+      var pctIncrease = stats.avgMin>0 ? ((neededMinPerDay/stats.avgMin)-1)*100 : 0;
+      if(pctIncrease>0 && isFinite(pctIncrease)){
+        msg += ' Necesitas subir tu ritmo un <b>'+Math.round(pctIncrease)+'%</b> (a ~'+Math.round(neededMinPerDay)+' min/día) para llegar a '+fmtMoney(cfg.cycleGoal)+'.';
+      }
+    } else if(stats.projTotal >= cfg.cycleGoal){
+      msg += ' Vas en camino a superar la meta. 🎯';
+    }
+    return msg;
+  }
+
+  function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+  function fmtRangeShort(start){
+    var end = new Date(start.getTime()+13*DAY_MS);
+    var o={day:'numeric',month:'short'};
+    return start.toLocaleDateString('es-HN',o)+' – '+end.toLocaleDateString('es-HN',o);
+  }
+  function renderAgentBadge(){
+    var badge = document.getElementById('agentBadge');
+    var txt = document.getElementById('agentIdText');
+    if(!badge || !txt) return;
+    if(cfg.agentId){
+      txt.textContent = cfg.agentId;
+      badge.classList.add('show');
+    } else {
+      badge.classList.remove('show');
+    }
+  }
+  function renderFooterStats(){
+    var el = document.getElementById('footerStats');
+    if(!el) return;
+    el.innerHTML = 'Meta diaria '+cfg.dailyGoal+' min &middot; Meta de ciclo '+fmtMoney(cfg.cycleGoal)+' &middot; Tarifa '+fmtMoney(cfg.ratePerMin)+'/min &middot; Comisión Deel '+(cfg.feePct*100).toFixed(0)+'% (subtotal &lt; '+fmtMoney(cfg.feeThreshold)+') o '+fmtMoney(cfg.feeFlat)+' fijo';
+  }
+
+  /* ---------- Editor de cualquier día del ciclo (1–14) ---------- */
+  var dayModal = document.getElementById('dayModalBg');
+  var editingISO = null;
+  function openDayEditor(dISO, dayNum){
+    editingISO = dISO;
+    var d = new Date(dISO+'T00:00:00');
+    document.getElementById('dayModalTitle').textContent = 'Día '+dayNum+' — '+capitalize(fmtDateEs(d));
+    renderDayEntries();
+    dayModal.classList.add('open');
+  }
+  function renderDayEntries(){
+    var list = entries[editingISO]||[];
+    var box = document.getElementById('dayEntries');
+    box.innerHTML='';
+    if(list.length===0){
+      box.innerHTML = '<div class="empty">Sin registros este día. Agrega uno arriba.</div>';
+      return;
+    }
+    list.slice().reverse().forEach(function(e){
+      var row = document.createElement('div');
+      row.className='entry-row';
+      var amtTxt = e.min+' min'+(e.usd!==undefined ? ' · '+fmtMoney(usdForEntry(e)) : '');
+      row.innerHTML = '<span class="l">'+(e.nota? e.nota : 'sesión')+'</span>'+
+        '<span><span class="amt">'+amtTxt+'</span> &nbsp; <button data-id="'+e.id+'" title="Eliminar">✕</button></span>';
+      box.appendChild(row);
+    });
+    box.querySelectorAll('button[data-id]').forEach(function(b){
+      b.addEventListener('click', function(){
+        entries[editingISO] = entries[editingISO].filter(function(e){return e.id!==b.dataset.id;});
+        saveEntries(); renderDayEntries(); renderAll();
+      });
+    });
+  }
+  document.getElementById('dayBtnAdd').addEventListener('click', function(){
+    var raw = document.getElementById('dayInMin').value;
+    var min = Number(raw);
+    var nota = document.getElementById('dayInNota').value.trim();
+    if(raw==='' || isNaN(min) || min<=0 || !editingISO){
+      alert('Ingresa un número de minutos válido y mayor a 0.');
+      logError('dayBtnAdd:validación', 'valor inválido: '+raw);
+      return;
+    }
+    if(!entries[editingISO]) entries[editingISO]=[];
+    entries[editingISO].push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), min:min, nota:nota});
+    saveEntries();
+    document.getElementById('dayInMin').value='';
+    document.getElementById('dayInNota').value='';
+    renderDayEntries(); renderAll();
+  });
+  document.getElementById('dayInMin').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('dayBtnAdd').click(); });
+  document.getElementById('dayInNota').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('dayBtnAdd').click(); });
+  document.getElementById('dayModalClose').addEventListener('click', function(){ dayModal.classList.remove('open'); });
+  dayModal.addEventListener('click', function(e){ if(e.target===dayModal) dayModal.classList.remove('open'); });
+
+  /* ---------- Cálculo de estadísticas de ciclo ---------- */
+  function cycleStats(start){
+    var today = todayDate();
+    var dayIdx = Math.min(14, dayIndexInCycle(today, start));
+    var days = [];
+    var totalMin = 0, subtotal = 0, daysWithData=0, sumMinElapsed=0;
+    for(var i=0;i<14;i++){
+      var d = new Date(start.getTime()+i*DAY_MS);
+      var dISO = iso(d);
+      var min = minutesForDate(dISO);
+      var usdDay = usdForDate(dISO);
+      var isPast = i < (dayIdx-1);
+      var isToday = i === (dayIdx-1);
+      var isFuture = i > (dayIdx-1);
+      if((isPast||isToday) && min>0) { daysWithData++; sumMinElapsed+=min; }
+      totalMin += min;
+      subtotal += usdDay;
+      days.push({date:d, iso:dISO, min:min, usd:usdDay, isPast:isPast, isToday:isToday, isFuture:isFuture});
+    }
+    var fee = subtotal < cfg.feeThreshold ? subtotal*cfg.feePct : cfg.feeFlat;
+    var total = subtotal - fee;
+    var totalHNL = total*cfg.exchangeRate;
+    var pendiente = cfg.cycleGoal - total;
+
+    var avgMin = daysWithData>0 ? sumMinElapsed/dayIdx : 0; // promedio sobre los días transcurridos (incluye ceros como parte real)
+    var remainingDays = 14-dayIdx;
+    var projFutureMin = avgMin*remainingDays;
+    var projTotalMin = totalMin - days.filter(function(d){return d.isFuture;}).reduce(function(s,d){return s+d.min;},0) + projFutureMin;
+    var projSubtotal = projTotalMin*cfg.ratePerMin;
+    var projFee = projSubtotal < cfg.feeThreshold ? projSubtotal*cfg.feePct : cfg.feeFlat;
+    var projTotal = projSubtotal-projFee;
+    var projPctGoal = cfg.cycleGoal>0 ? (projTotal/cfg.cycleGoal)*100 : 0;
+
+    return {
+      start:start, days:days, dayIdx:dayIdx, totalMin:totalMin, subtotal:subtotal, fee:fee, total:total,
+      totalHNL:totalHNL, pendiente:pendiente, avgMin:avgMin, daysWithData:dayIdx, projTotalMin:projTotalMin,
+      projTotal:projTotal, projPctGoal:projPctGoal
+    };
+  }
+
+  /* ---------- Forecast (promedio real de los últimos 3 meses) ---------- */
+  function trailing90Stats(refDate){
+    var cutoff = new Date(refDate.getTime() - 90*DAY_MS);
+    var mins = [], usds = [];
+    Object.keys(entries).forEach(function(dISO){
+      var arr = entries[dISO];
+      if(!arr || arr.length===0) return;
+      var d = new Date(dISO+'T00:00:00');
+      if(d>=cutoff && d<=refDate){
+        var m = minutesForDate(dISO), u = usdForDate(dISO);
+        if(m>0 || u>0){ mins.push(m); usds.push(u); }
+      }
+    });
+    var n = mins.length;
+    var avgMin = n ? mins.reduce(function(a,b){return a+b;},0)/n : 0;
+    var avgUsd = n ? usds.reduce(function(a,b){return a+b;},0)/n : 0;
+    return {avgMin:avgMin, avgUsd:avgUsd, sampleDays:n};
+  }
+  function trailing90SegmentStats(refDate){
+    var cutoff = new Date(refDate.getTime() - 90*DAY_MS);
+    var segEarnings = {}; DAY_SEGMENTS.forEach(function(s){ segEarnings[s]=0; });
+    var total = 0, any = false;
+    Object.keys(calls).forEach(function(dISO){
+      var d = new Date(dISO+'T00:00:00');
+      if(d<cutoff || d>refDate) return;
+      (calls[dISO]||[]).forEach(function(c){
+        if(!c.segment || DAY_SEGMENTS.indexOf(c.segment)===-1) return;
+        segEarnings[c.segment] += Number(c.usd||0);
+        total += Number(c.usd||0);
+        any = true;
+      });
+    });
+    if(!any || total<=0) return {hasData:false};
+    var best = DAY_SEGMENTS.reduce(function(a,b){ return segEarnings[b]>segEarnings[a] ? b : a; }, DAY_SEGMENTS[0]);
+    return {hasData:true, segment:best, pct:(segEarnings[best]/total)*100, earnings:segEarnings[best]};
+  }
+  function forecastStats(start){
+    var today = todayDate();
+    var dayIdx = Math.min(14, dayIndexInCycle(today, start));
+    var tri = trailing90Stats(today);
+    var actualMin=0, actualUsd=0;
+    for(var i=0;i<dayIdx;i++){
+      var d = new Date(start.getTime()+i*DAY_MS);
+      actualMin += minutesForDate(iso(d));
+      actualUsd += usdForDate(iso(d));
+    }
+    var remaining = 14-dayIdx;
+    var projMin = actualMin + remaining*tri.avgMin;
+    var projSubtotal = actualUsd + remaining*tri.avgUsd;
+    var projFee = projSubtotal < cfg.feeThreshold ? projSubtotal*cfg.feePct : cfg.feeFlat;
+    var projTotal = projSubtotal - projFee;
+    var segStats = trailing90SegmentStats(today);
+    return {
+      avgMin:tri.avgMin, avgUsd:tri.avgUsd, sampleDays:tri.sampleDays,
+      projMin:projMin, projTotal:projTotal, projTotalHNL:projTotal*cfg.exchangeRate,
+      bestSegment:segStats
+    };
+  }
+
+  /* ---------- Item E: Forecast con intervalo de confianza ----------
+     Usa la desviación estándar del ingreso diario (USD) de los últimos 90 días para
+     estimar un rango de cierre de ciclo en vez de un solo número puntual. Se usa
+     z≈1.28 (≈80% de confianza en una distribución normal) como aproximación razonable
+     dado el tamaño de muestra típico; no es un modelo estadístico riguroso. */
+  function forecastConfidence(start){
+    var today = todayDate();
+    var dayIdx = Math.min(14, dayIndexInCycle(today, start));
+    var remaining = 14-dayIdx;
+    var cutoff = new Date(today.getTime()-90*DAY_MS);
+    var usds = [];
+    Object.keys(entries).forEach(function(dISO){
+      var arr = entries[dISO];
+      if(!arr || arr.length===0) return;
+      var d = new Date(dISO+'T00:00:00');
+      if(d<cutoff || d>today) return;
+      var u = usdForDate(dISO);
+      if(u>0) usds.push(u);
+    });
+    var n = usds.length;
+    if(n<3 || remaining<=0) return null;
+    var mean = usds.reduce(function(a,b){return a+b;},0)/n;
+    var variance = usds.reduce(function(a,b){return a+Math.pow(b-mean,2);},0)/(n-1);
+    var sd = Math.sqrt(variance);
+    var actualUsd = 0;
+    for(var i=0;i<dayIdx;i++){ actualUsd += usdForDate(iso(new Date(start.getTime()+i*DAY_MS))); }
+    var projMeanSub = actualUsd + remaining*mean;
+    var projSD = sd*Math.sqrt(remaining);
+    var z = 1.28;
+    function applyFee(subtotal){
+      subtotal = Math.max(0, subtotal);
+      var fee = subtotal < cfg.feeThreshold ? subtotal*cfg.feePct : cfg.feeFlat;
+      return Math.max(0, subtotal-fee);
+    }
+    return { low: applyFee(projMeanSub - z*projSD), high: applyFee(projMeanSub + z*projSD), n:n };
+  }
+
+  /* ---------- Detalle de llamadas de un ciclo (req. 3) ---------- */
+  function cycleCallStats(start){
+    var allCalls = [];
+    for(var i=0;i<14;i++){
+      var d = new Date(start.getTime()+i*DAY_MS);
+      allCalls = allCalls.concat(callsForDate(iso(d)));
+    }
+    var callEarnings = 0, adjEarnings = 0;
+    var audioEarnings = 0, videoEarnings = 0;
+    var segEarnings = {}, segMin = {}, segCount = {};
+    DAY_SEGMENTS.forEach(function(s){ segEarnings[s]=0; segMin[s]=0; segCount[s]=0; });
+
+    allCalls.forEach(function(c){
+      callEarnings += Number(c.usd||0);
+      adjEarnings += Number(c.adj||0);
+      var line = String(c.line||'').toLowerCase();
+      if(line.indexOf('audio')!==-1) audioEarnings += Number(c.usd||0);
+      else if(line.indexOf('video')!==-1) videoEarnings += Number(c.usd||0);
+      if(c.segment && DAY_SEGMENTS.indexOf(c.segment)!==-1){
+        segEarnings[c.segment] += Number(c.usd||0);
+        segMin[c.segment] += Number(c.min||0);
+        segCount[c.segment] += 1;
+      }
+    });
+
+    var totalIncome = callEarnings + adjEarnings;
+    var pctCall = totalIncome>0 ? (callEarnings/totalIncome)*100 : 0;
+    var pctAdj = totalIncome>0 ? (adjEarnings/totalIncome)*100 : 0;
+
+    var audioVideoTotal = audioEarnings + videoEarnings;
+    var pctAudio = audioVideoTotal>0 ? (audioEarnings/audioVideoTotal)*100 : 0;
+    var pctVideo = audioVideoTotal>0 ? (videoEarnings/audioVideoTotal)*100 : 0;
+
+    var segStats = DAY_SEGMENTS.map(function(s){
+      var avgDur = segCount[s]>0 ? segMin[s]/segCount[s] : 0;
+      var pctIncome = callEarnings>0 ? (segEarnings[s]/callEarnings)*100 : 0;
+      return {name:s, earnings:segEarnings[s], avgDur:avgDur, count:segCount[s], pctIncome:pctIncome};
+    });
+    var longestDurSeg = segStats.slice().sort(function(a,b){return b.avgDur-a.avgDur;})[0];
+
+    return {
+      totalCalls: allCalls.length, hasData: allCalls.length>0,
+      callEarnings:callEarnings, adjEarnings:adjEarnings, pctCall:pctCall, pctAdj:pctAdj,
+      audioEarnings:audioEarnings, videoEarnings:videoEarnings, pctAudio:pctAudio, pctVideo:pctVideo,
+      segStats:segStats, longestDurSeg:longestDurSeg
+    };
+  }
+
+  function renderCycleDetail(start){
+    var cs = cycleCallStats(start);
+    var body = document.getElementById('cycleDetailBody');
+    document.getElementById('cycleDetailTitle').textContent = 'Detalle del ciclo — '+fmtRangeShort(start);
+
+    if(!cs.hasData){
+      body.innerHTML = '<div class="empty">Este ciclo no tiene detalle por llamada. Importa la hoja de cálculo (CSV/XLSX) de este período en Ajustes para ver estas relaciones.</div>';
+      document.getElementById('cycleDetailModalBg').classList.add('open');
+      return;
+    }
+
+    var html = '';
+
+    // a. % ingreso por llamada vs % ingreso por ajuste
+    html += '<div class="rel-block"><h4>Ingreso por llamada vs. ingreso por ajuste</h4>'+
+      '<div class="split-bar"><i style="width:'+cs.pctCall.toFixed(1)+'%;background:var(--accent)"></i><i style="width:'+cs.pctAdj.toFixed(1)+'%;background:var(--amber)"></i></div>'+
+      '<div class="split-legend"><span>Llamada &middot; <b>'+cs.pctCall.toFixed(1)+'%</b> ('+fmtMoney(cs.callEarnings)+')</span>'+
+      '<span>Ajuste &middot; <b>'+cs.pctAdj.toFixed(1)+'%</b> ('+fmtMoney(cs.adjEarnings)+')</span></div></div>';
+
+    // b. % ingreso audio vs video
+    var abTotal = cs.audioEarnings+cs.videoEarnings;
+    html += '<div class="rel-block"><h4>Ingreso por llamada de audio vs. video</h4>';
+    if(abTotal>0){
+      html += '<div class="split-bar"><i style="width:'+cs.pctAudio.toFixed(1)+'%;background:var(--green)"></i><i style="width:'+cs.pctVideo.toFixed(1)+'%;background:var(--red)"></i></div>'+
+        '<div class="split-legend"><span>Audio &middot; <b>'+cs.pctAudio.toFixed(1)+'%</b> ('+fmtMoney(cs.audioEarnings)+')</span>'+
+        '<span>Video &middot; <b>'+cs.pctVideo.toFixed(1)+'%</b> ('+fmtMoney(cs.videoEarnings)+')</span></div>';
+    } else {
+      html += '<div class="empty" style="padding:8px 2px;">Sin columna de línea de servicio (Audio/Video) en los datos importados.</div>';
+    }
+    html += '</div>';
+
+    // c1. % ingreso por segmento del día
+    var maxSegIncome = Math.max.apply(null, cs.segStats.map(function(s){return s.pctIncome;}).concat([1]));
+    html += '<div class="rel-block"><h4>% de ingreso por segmento del día</h4><div class="seg-list">'+
+      cs.segStats.map(function(s){
+        return '<div class="seg-row"><span class="seg-name">'+s.name+'</span>'+
+          '<span class="seg-bar"><i style="width:'+(maxSegIncome>0?(s.pctIncome/maxSegIncome*100):0).toFixed(1)+'%"></i></span>'+
+          '<span class="seg-val">'+s.pctIncome.toFixed(1)+'%</span></div>';
+      }).join('')+
+      '</div></div>';
+
+    // c2. Segmento con mayor duración promedio de llamada
+    html += '<div class="rel-block"><h4>Segmento con llamadas de mayor duración promedio</h4><div class="seg-list">'+
+      cs.segStats.map(function(s){
+        var isBest = cs.longestDurSeg && s.name===cs.longestDurSeg.name && s.count>0;
+        return '<div class="seg-row'+(isBest?' best':'')+'"><span class="seg-name">'+s.name+(isBest?' ★':'')+'</span>'+
+          '<span class="seg-bar"><i style="width:'+(cs.longestDurSeg && cs.longestDurSeg.avgDur>0 ? (s.avgDur/cs.longestDurSeg.avgDur*100) : 0).toFixed(1)+'%"></i></span>'+
+          '<span class="seg-val">'+s.avgDur.toFixed(1)+' min</span></div>';
+      }).join('')+
+      '</div>'+
+      (cs.longestDurSeg && cs.longestDurSeg.count>0
+        ? '<div class="note" style="margin-top:10px;">El segmento <b>'+cs.longestDurSeg.name+'</b> promedia las llamadas de mayor duración ('+cs.longestDurSeg.avgDur.toFixed(1)+' min por llamada).</div>'
+        : '')+
+      '</div>';
+
+    body.innerHTML = html;
+    document.getElementById('cycleDetailModalBg').classList.add('open');
+  }
+  document.getElementById('cycleDetailClose').addEventListener('click', function(){
+    document.getElementById('cycleDetailModalBg').classList.remove('open');
+  });
+  document.getElementById('cycleDetailModalBg').addEventListener('click', function(e){
+    if(e.target===this) this.classList.remove('open');
+  });
+
+  /* ---------- Vista CICLO ---------- */
+  function renderCiclo(){
+    var today = todayDate();
+    var start = cycleStartFor(today);
+    var stats = cycleStats(start);
+
+    var strip = document.getElementById('cicloStrip');
+    strip.innerHTML='';
+    stats.days.forEach(function(d, i){
+      var cell = document.createElement('div');
+      var st = statusOf(d.min, cfg.dailyGoal);
+      if(d.isPast || d.isToday){
+        cell.className = 'cell clickable '+(d.isToday?'today ':'past ')+st;
+      } else {
+        // proyección basada en promedio actual
+        var projSt = statusOf(stats.avgMin, cfg.dailyGoal);
+        cell.className = 'cell clickable future proj-'+projSt;
+      }
+      cell.innerHTML = '<div class="dnum">'+(i+1)+'</div><div class="dlabel">'+DAY_LABELS[i%7]+'</div>';
+      cell.title = 'Editar día '+(i+1);
+      cell.addEventListener('click', (function(dISO, dayNum){
+        return function(){ openDayEditor(dISO, dayNum); };
+      })(d.iso, i+1));
+      strip.appendChild(cell);
+    });
+
+    document.getElementById('cicloNota').innerHTML =
+      'Días 1–'+stats.dayIdx+' son estadística (datos reales). Días '+(stats.dayIdx+1)+'–14 se muestran como <b>probabilidad</b>: '+
+      'proyectados a partir del ritmo promedio actual de <b>'+Math.round(stats.avgMin)+' min/día</b>.';
+
+    var halfGoal = Math.round(cfg.dailyGoal/2);
+    document.getElementById('legRed').textContent = 'Bajo (<'+halfGoal+' min)';
+    document.getElementById('legAmber').textContent = 'Medio ('+halfGoal+'–'+(cfg.dailyGoal-1)+' min)';
+    document.getElementById('legGreen').textContent = 'Meta (≥'+cfg.dailyGoal+' min)';
+
+    var pctCiclo = Math.min(100, Math.round((stats.totalMin/(cfg.dailyGoal*14))*100));
+    document.getElementById('cTiempoMin').textContent = stats.totalMin.toLocaleString()+' / '+(cfg.dailyGoal*14).toLocaleString();
+    document.getElementById('cTiempoHrs').textContent = fmtHrs(stats.totalMin)+' h';
+    document.getElementById('cTiempoPct').textContent = pctCiclo+'%';
+
+    var cycleGoalMin = cfg.dailyGoal*14;
+    var cycleStatus = statusOf(stats.totalMin, cycleGoalMin);
+    var ciclePts = [], cicloRunning = 0;
+    stats.days.forEach(function(d){ if(d.isPast || d.isToday){ cicloRunning += d.min; ciclePts.push(cicloRunning); } });
+    renderPerfViz('perfVizCiclo', 'ciclo', stats.totalMin, cycleGoalMin, cycleStatus, ciclePts);
+
+    document.getElementById('cProyTiempo').innerHTML =
+      'Proyección de cierre: <b>'+Math.round(stats.projTotalMin).toLocaleString()+' min</b> ('+fmtHrs(stats.projTotalMin)+' h), '+
+      (stats.projTotalMin>=cfg.dailyGoal*14 ? 'suficiente para alcanzar la meta de tiempo del ciclo.' : 'por debajo de la meta de tiempo del ciclo.');
+
+    document.getElementById('cSubtotal').textContent = fmtMoney(stats.subtotal);
+    document.getElementById('cFee').textContent = fmtMoney(stats.fee);
+    document.getElementById('cTotal').textContent = fmtMoney(stats.total);
+    document.getElementById('cTotalHnl').textContent = fmtHNL(stats.totalHNL);
+    document.getElementById('cMeta').textContent = fmtMoney(cfg.cycleGoal);
+    document.getElementById('cPendiente').textContent = fmtMoney(Math.max(0,stats.pendiente));
+
+    var fc = forecastStats(start);
+    document.getElementById('fcSample').textContent = fc.sampleDays;
+    document.getElementById('fcAvgMin').textContent = Math.round(fc.avgMin)+' min';
+    document.getElementById('fcAvgUsd').textContent = fmtMoney(fc.avgUsd);
+    document.getElementById('fcProjTotal').textContent = fmtMoney(fc.projTotal);
+    document.getElementById('fcProjHnl').textContent = fmtHNL(fc.projTotalHNL);
+    document.getElementById('fcBestSegment').textContent = (fc.bestSegment && fc.bestSegment.hasData)
+      ? fc.bestSegment.segment+' — '+fc.bestSegment.pct.toFixed(1)+'% de productividad'
+      : 'Sin detalle por llamada aún';
+    var conf = forecastConfidence(start);
+    document.getElementById('fcRange').textContent = conf
+      ? fmtMoney(conf.low)+' – '+fmtMoney(conf.high)+' (n='+conf.n+')'
+      : 'Muestra insuficiente';
+    document.getElementById('fcNota').innerHTML = fc.sampleDays>0
+      ? 'Con base en <b>'+fc.sampleDays+' días</b> registrados en los últimos 3 meses (promedio real de <b>'+Math.round(fc.avgMin)+' min/día</b> y <b>'+fmtMoney(fc.avgUsd)+'/día</b>), se combinan tus días ya trabajados en este ciclo con ese promedio histórico para los días restantes.'
+      : 'Aún no hay suficiente histórico en los últimos 3 meses para calcular un forecast confiable.';
+  }
+
+  /* ---------- Item F: Estacionalidad — promedio por día de la semana ---------- */
+  var WEEKDAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  function weekdayAverages(){
+    var sums=[0,0,0,0,0,0,0], counts=[0,0,0,0,0,0,0];
+    Object.keys(entries).forEach(function(dISO){
+      var min = minutesForDate(dISO);
+      if(min<=0) return;
+      var d = new Date(dISO+'T00:00:00');
+      var dow = d.getDay();
+      sums[dow]+=min; counts[dow]++;
+    });
+    return WEEKDAY_NAMES.map(function(name,i){ return {name:name, avg: counts[i]?sums[i]/counts[i]:0, n:counts[i]}; });
+  }
+  function renderSeasonality(){
+    var box = document.getElementById('seasonChart');
+    var nota = document.getElementById('seasonNota');
+    if(!box) return;
+    var data = weekdayAverages();
+    var totalN = data.reduce(function(s,d){return s+d.n;},0);
+    if(totalN===0){
+      box.innerHTML = '<div class="empty">Aún no hay suficiente histórico para detectar patrones semanales.</div>';
+      nota.textContent = '—';
+      return;
+    }
+    var maxAvg = Math.max.apply(null, data.map(function(d){return d.avg;}).concat([1]));
+    box.innerHTML = '<div class="seg-list">'+data.map(function(d){
+      return '<div class="seg-row"><span class="seg-name">'+d.name+'</span>'+
+        '<span class="seg-bar"><i style="width:'+(maxAvg>0?(d.avg/maxAvg*100):0).toFixed(1)+'%;background:'+(statusOf(d.avg,cfg.dailyGoal)==='green'?'var(--green)':statusOf(d.avg,cfg.dailyGoal)==='amber'?'var(--amber)':'var(--accent)')+'"></i></span>'+
+        '<span class="seg-val">'+Math.round(d.avg)+' min</span></div>';
+    }).join('')+'</div>';
+    var best = data.slice().sort(function(a,b){return b.avg-a.avg;})[0];
+    var worst = data.filter(function(d){return d.n>0;}).sort(function(a,b){return a.avg-b.avg;})[0];
+    nota.innerHTML = 'Tu día más productivo históricamente es <b>'+best.name+'</b> ('+Math.round(best.avg)+' min promedio). '+
+      (worst && worst.name!==best.name ? 'El más flojo suele ser <b>'+worst.name+'</b> ('+Math.round(worst.avg)+' min promedio) — útil para planificar refuerzos esos días.' : '');
+  }
+
+  /* ---------- Vista REPORTES ---------- */
+  function deleteCycleData(startDate){
+    for(var i=0;i<14;i++){
+      var d = new Date(startDate.getTime()+i*DAY_MS);
+      delete entries[iso(d)];
+      delete calls[iso(d)];
+    }
+    saveEntries();
+    saveCalls();
+    renderAll();
+  }
+  function allCyclesWithData(){
+    var isoDates = Object.keys(entries).filter(function(k){return (entries[k]||[]).length>0;}).sort();
+    if(isoDates.length===0) return [];
+    var starts = {};
+    isoDates.forEach(function(dISO){
+      var d = new Date(dISO+'T00:00:00');
+      var s = cycleStartFor(d);
+      starts[iso(s)] = s;
+    });
+    var list = Object.keys(starts).sort().map(function(k){return starts[k];});
+    return list;
+  }
+
+  /* ---------- Item D: paginación del historial de ciclos ----------
+     Evita renderizar de golpe cientos de filas de DOM si el histórico crece mucho;
+     se cargan de a REPORTS_PAGE_SIZE en REPORTS_PAGE_SIZE. */
+  var REPORTS_PAGE_SIZE = 15;
+  var reportsShown = REPORTS_PAGE_SIZE;
+  function renderReportes(){
+    var starts = allCyclesWithData();
+    var listBox = document.getElementById('cycleList');
+    var chartBox = document.getElementById('compareChart');
+    var moreBtn = document.getElementById('cycleListMoreBtn');
+    listBox.innerHTML=''; chartBox.innerHTML='';
+
+    if(starts.length===0){
+      listBox.innerHTML = '<div class="empty">Todavía no hay ciclos con datos registrados.</div>';
+      if(moreBtn) moreBtn.style.display='none';
+      renderSeasonality();
+      return;
+    }
+
+    var todayStartISO = iso(cycleStartFor(todayDate()));
+    var maxTotal = 1;
+    var summaries = starts.map(function(s){
+      var stats = cycleStats(s);
+      maxTotal = Math.max(maxTotal, stats.total, cfg.cycleGoal);
+      return {start:s, stats:stats, isCurrent: iso(s)===todayStartISO};
+    }).reverse(); // más reciente primero
+
+    var pageSummaries = summaries.slice(0, reportsShown);
+    if(moreBtn){
+      if(summaries.length > reportsShown){
+        moreBtn.style.display='inline-block';
+        moreBtn.textContent = 'Cargar más ciclos ▾ ('+(summaries.length-reportsShown)+' restantes)';
+      } else {
+        moreBtn.style.display='none';
+      }
+    }
+
+    pageSummaries.forEach(function(item){
+      var row = document.createElement('div');
+      row.className='cycle-item';
+      row.title = 'Ver relaciones de ingreso de este ciclo';
+      var st = item.stats;
+      row.innerHTML =
+        '<div><div class="range">'+fmtRangeShort(item.start)+(item.isCurrent?' &middot; en curso':'')+'</div>'+
+        '<div class="tag">'+Math.round((st.totalMin/(cfg.dailyGoal*14))*100)+'% del tiempo &middot; '+st.dayIdx+'/14 días</div></div>'+
+        '<div class="right" style="display:flex;align-items:center;gap:12px;">'+
+          '<div><div class="amount">'+fmtMoney(st.total)+'</div>'+
+          '<div class="tag">'+(st.total>=cfg.cycleGoal?'meta cumplida':'meta: '+fmtMoney(cfg.cycleGoal))+'</div></div>'+
+          '<button class="btn ghost sm cycle-del-btn" data-start="'+iso(item.start)+'" title="Eliminar todos los datos de este ciclo">🗑</button>'+
+        '</div>';
+      row.addEventListener('click', function(){ renderCycleDetail(item.start); });
+      listBox.appendChild(row);
+    });
+    listBox.querySelectorAll('.cycle-del-btn').forEach(function(btn){
+      btn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var start = new Date(btn.dataset.start+'T00:00:00');
+        var label = fmtRangeShort(start);
+        if(confirm('¿Eliminar todos los datos cargados del ciclo '+label+'? Esta acción no se puede deshacer.')){
+          deleteCycleData(start);
+        }
+      });
+    });
+
+    // comparativo (orden cronológico, más reciente a la derecha)
+    summaries.slice().reverse().forEach(function(item){
+      var st = item.stats;
+      var h = Math.max(4, Math.round((st.total/maxTotal)*130));
+      var color = st.total>=cfg.cycleGoal ? 'var(--green)' : st.total>=cfg.cycleGoal*0.5 ? 'var(--amber)' : 'var(--red)';
+      var col = document.createElement('div');
+      col.className='colwrap';
+      col.innerHTML =
+        '<div class="val">'+fmtMoney(st.total)+'</div>'+
+        '<div class="col" style="height:'+h+'px;background:'+color+(item.isCurrent?';outline:1px dashed var(--accent);outline-offset:2px':'')+'"></div>'+
+        '<div class="lbl">'+item.start.toLocaleDateString('es-HN',{day:'numeric',month:'short'})+'</div>';
+      chartBox.appendChild(col);
+    });
+
+    var wrap = document.getElementById('compareWrap');
+    if(wrap) requestAnimationFrame(function(){ wrap.scrollLeft = wrap.scrollWidth; });
+
+    renderSeasonality();
+  }
+  var cycleListMoreBtnEl = document.getElementById('cycleListMoreBtn');
+  if(cycleListMoreBtnEl){
+    cycleListMoreBtnEl.addEventListener('click', function(){
+      reportsShown += REPORTS_PAGE_SIZE;
+      renderReportes();
+    });
+  }
+
+  /* ---------- Agregar entrada ---------- */
+  document.getElementById('btnAdd').addEventListener('click', function(){
+    var raw = document.getElementById('inMin').value;
+    var min = Number(raw);
+    var nota = document.getElementById('inNota').value.trim();
+    if(raw==='' || isNaN(min) || min<=0){
+      alert('Ingresa un número de minutos válido y mayor a 0.');
+      logError('btnAdd:validación', 'valor inválido: '+raw);
+      return;
+    }
+    if(min>1440){
+      if(!confirm('Ingresaste '+min+' minutos (más de 24 horas). ¿Confirmas que es correcto?')) return;
+    }
+    var dISO = iso(todayDate());
+    if(!entries[dISO]) entries[dISO]=[];
+    entries[dISO].push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), min:min, nota:nota});
+    saveEntries();
+    document.getElementById('inMin').value='';
+    document.getElementById('inNota').value='';
+    renderAll();
+  });
+  document.getElementById('inMin').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('btnAdd').click(); });
+  document.getElementById('inNota').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('btnAdd').click(); });
+
+  document.getElementById('btnClearToday').addEventListener('click', function(){
+    var dISO = iso(todayDate());
+    var list = entries[dISO]||[];
+    if(list.length===0) return;
+    if(!confirm('¿Eliminar las '+list.length+' entradas registradas hoy ('+capitalize(fmtDateEs(todayDate()))+')? Esta acción no se puede deshacer.')) return;
+    delete entries[dISO];
+    saveEntries();
+    renderAll();
+  });
+
+  /* ---------- Ajustes / Modal ---------- */
+  var modal = document.getElementById('modalBg');
+  document.getElementById('btnSettings').addEventListener('click', function(){
+    document.getElementById('cfgRate').value = cfg.exchangeRate;
+    document.getElementById('cfgDailyGoal').value = cfg.dailyGoal;
+    document.getElementById('cfgRatePerMin').value = cfg.ratePerMin;
+    document.getElementById('cfgCycleGoal').value = cfg.cycleGoal;
+    document.getElementById('cfgFeePct').value = Math.round(cfg.feePct*1000)/10;
+    document.getElementById('cfgFeeFlat').value = cfg.feeFlat;
+    document.getElementById('cfgFeeThreshold').value = cfg.feeThreshold;
+    renderRateStatusText(document.getElementById('rateStatus'));
+    document.getElementById('cfgVizHoy').value = cfg.vizMode;
+    document.getElementById('cfgVizCiclo').value = cfg.vizModeCiclo;
+    document.getElementById('cfgStreaksEnabled').checked = !!cfg.streaksEnabled;
+    document.getElementById('cfgWeeklyGoalDays').value = cfg.weeklyGoalDays;
+    document.getElementById('cfgNotifEnabled').checked = !!cfg.notifEnabled;
+    document.getElementById('cfgNotifDaily').checked = !!cfg.notifDaily;
+    document.getElementById('cfgNotifStart').checked = !!cfg.notifStart;
+    document.getElementById('cfgNotifLowPace').checked = !!cfg.notifLowPace;
+    document.getElementById('cfgDriveClientId').value = cfg.driveClientId||'';
+    document.getElementById('cfgDriveAuto').checked = !!cfg.driveAuto;
+    renderNotifPermStatus();
+    renderDriveStatus();
+    modal.classList.add('open');
+    modalScroll.scrollTop = 0;
+    setTimeout(updateModalScrollBtns, 0);
+  });
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.classList.remove('open'); });
+
+  /* ---------- Ajustes: botones scroll up/down ---------- */
+  var modalScroll = document.getElementById('modalScroll');
+  var scrollUpBtn = document.getElementById('modalScrollUp');
+  var scrollDownBtn = document.getElementById('modalScrollDown');
+  function updateModalScrollBtns(){
+    var atTop = modalScroll.scrollTop <= 2;
+    var atBottom = modalScroll.scrollTop + modalScroll.clientHeight >= modalScroll.scrollHeight - 2;
+    scrollUpBtn.classList.toggle('disabled', atTop);
+    scrollDownBtn.classList.toggle('disabled', atBottom);
+  }
+  scrollUpBtn.addEventListener('click', function(){
+    modalScroll.scrollBy({top:-160, behavior:'smooth'});
+  });
+  scrollDownBtn.addEventListener('click', function(){
+    modalScroll.scrollBy({top:160, behavior:'smooth'});
+  });
+  modalScroll.addEventListener('scroll', updateModalScrollBtns);
+  window.addEventListener('resize', function(){ if(modal.classList.contains('open')) updateModalScrollBtns(); });
+
+  function positiveOr(val, fallback){
+    var n = Number(val);
+    return (val!=='' && !isNaN(n) && n>0) ? n : fallback;
+  }
+  document.getElementById('btnSaveCfg').addEventListener('click', function(){
+    var errs = [];
+    var rateInput = document.getElementById('cfgRate').value;
+    if(rateInput!=='' && (isNaN(Number(rateInput)) || Number(rateInput)<=0)) errs.push('La tasa de cambio debe ser un número positivo.');
+    var dailyInput = document.getElementById('cfgDailyGoal').value;
+    if(dailyInput!=='' && (isNaN(Number(dailyInput)) || Number(dailyInput)<=0)) errs.push('La meta diaria debe ser un número positivo.');
+    var rpmInput = document.getElementById('cfgRatePerMin').value;
+    if(rpmInput!=='' && (isNaN(Number(rpmInput)) || Number(rpmInput)<=0)) errs.push('La tarifa por minuto debe ser positiva.');
+    var cycleGoalInput = document.getElementById('cfgCycleGoal').value;
+    if(cycleGoalInput!=='' && (isNaN(Number(cycleGoalInput)) || Number(cycleGoalInput)<=0)) errs.push('La meta de ciclo debe ser positiva.');
+    var weeklyInput = document.getElementById('cfgWeeklyGoalDays').value;
+    if(weeklyInput!=='' && (isNaN(Number(weeklyInput)) || Number(weeklyInput)<1 || Number(weeklyInput)>7)) errs.push('La meta semanal debe ser entre 1 y 7 días.');
+    if(errs.length){
+      alert('Revisa estos valores antes de guardar:\n\n• '+errs.join('\n• '));
+      logError('btnSaveCfg:validación', errs.join(' | '));
+      return;
+    }
+    cfg.exchangeRate = positiveOr(rateInput, cfg.exchangeRate);
+    cfg.dailyGoal = positiveOr(dailyInput, cfg.dailyGoal);
+    cfg.ratePerMin = positiveOr(rpmInput, cfg.ratePerMin);
+    cfg.cycleGoal = positiveOr(cycleGoalInput, cfg.cycleGoal);
+    var feePctInput = document.getElementById('cfgFeePct').value;
+    cfg.feePct = (feePctInput!=='' && !isNaN(Number(feePctInput)) && Number(feePctInput)>=0) ? Number(feePctInput)/100 : cfg.feePct;
+    cfg.feeFlat = (document.getElementById('cfgFeeFlat').value!=='' && Number(document.getElementById('cfgFeeFlat').value)>=0) ? Number(document.getElementById('cfgFeeFlat').value) : cfg.feeFlat;
+    cfg.feeThreshold = positiveOr(document.getElementById('cfgFeeThreshold').value, cfg.feeThreshold);
+    cfg.vizMode = document.getElementById('cfgVizHoy').value || cfg.vizMode;
+    cfg.vizModeCiclo = document.getElementById('cfgVizCiclo').value || cfg.vizModeCiclo;
+    cfg.streaksEnabled = document.getElementById('cfgStreaksEnabled').checked;
+    cfg.weeklyGoalDays = positiveOr(weeklyInput, cfg.weeklyGoalDays);
+    cfg.notifEnabled = document.getElementById('cfgNotifEnabled').checked;
+    cfg.notifDaily = document.getElementById('cfgNotifDaily').checked;
+    cfg.notifStart = document.getElementById('cfgNotifStart').checked;
+    cfg.notifLowPace = document.getElementById('cfgNotifLowPace').checked;
+    cfg.driveClientId = document.getElementById('cfgDriveClientId').value.trim();
+    cfg.driveAuto = document.getElementById('cfgDriveAuto').checked;
+    saveCfg();
+    modal.classList.remove('open');
+    renderAll();
+  });
+
+  document.getElementById('btnFetchRate').addEventListener('click', function(){
+    updateExchangeRateAuto(document.getElementById('rateStatus'), true);
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function(){
+    var msg = 'Esto borrará TODO el historial de reportes y restablecerá la configuración a los valores por defecto:\n\n'+
+      '• Sin histórico de reportes\n• Meta diaria: 480 min\n• Meta de ciclo: $570\n• Tarifa: $0.12/min\n'+
+      '• Título: "Payment Analysis Propio"\n• Gráfica por defecto: Medidor\n\nEsta acción no se puede deshacer. ¿Continuar?';
+    if(!confirm(msg)) return;
+    localStorage.removeItem('bitacora_entries');
+    localStorage.removeItem('bitacora_calls');
+    localStorage.setItem('bitacora_cfg', JSON.stringify(Object.assign({}, DEFAULTS, {
+      title: 'Payment Analysis Propio',
+      dailyGoal: 480,
+      cycleGoal: 570,
+      ratePerMin: 0.12,
+      vizMode: 'gauge',
+      vizModeCiclo: 'gauge',
+      agentId: ''
+    })));
+    location.reload();
+  });
+  document.getElementById('btnExport').addEventListener('click', function(){
+    var blob = new Blob([JSON.stringify({cfg:cfg, entries:entries, calls:calls}, null, 2)], {type:'application/json'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bitacora-ciclo-'+iso(todayDate())+'.json';
+    a.click();
+  });
+  document.getElementById('fileImport').addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var data = JSON.parse(ev.target.result);
+        if(data.cfg) cfg = Object.assign({}, DEFAULTS, data.cfg);
+        if(data.entries) entries = data.entries;
+        if(data.calls) calls = data.calls;
+        saveCfg(); saveEntries(); saveCalls();
+        renderAgentBadge();
+        renderAll();
+        document.getElementById('rateStatus').textContent = 'Datos importados correctamente.';
+      }catch(err){
+        alert('El archivo no es un respaldo válido.');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  /* ---------- Importar hoja de cálculo (CSV/XLSX) al histórico ---------- */
+  var DATE_ALIASES = ['service date','fecha','date','fecha de servicio','fecha servicio','fecha del servicio'];
+  var MIN_ALIASES = ['quantity','minutos','minutes','duración','duracion','min','minutos trabajados'];
+  var USD_ALIASES = ['earnings','ganancia','monto','pago','usd','earning','ingreso','ingresos'];
+  var ADJ_ALIASES = ['adjustment','ajuste','ajustes'];
+  var LINE_ALIASES = ['service line','tipo de llamada','tipo de servicio','línea de servicio','linea de servicio'];
+  var STARTTIME_ALIASES = ['start time (central)','start time','hora de inicio','hora inicio'];
+  var AGENT_ALIASES = ['agent id','agente id','id de agente','id agente'];
+  function findKey(rowKeys, aliases){
+    for(var i=0;i<rowKeys.length;i++){
+      var k = String(rowKeys[i]).toLowerCase().trim();
+      if(aliases.indexOf(k)!==-1) return rowKeys[i];
+    }
+    for(var i=0;i<rowKeys.length;i++){
+      var k = String(rowKeys[i]).toLowerCase();
+      for(var j=0;j<aliases.length;j++){ if(k.indexOf(aliases[j])!==-1) return rowKeys[i]; }
+    }
+    return null;
+  }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function parseDateFlexible(val){
+    if(val instanceof Date && !isNaN(val)) return val.getFullYear()+'-'+pad2(val.getMonth()+1)+'-'+pad2(val.getDate());
+    if(typeof val === 'number' && window.XLSX && XLSX.SSF){
+      var dc = XLSX.SSF.parse_date_code(val);
+      if(dc) return dc.y+'-'+pad2(dc.m)+'-'+pad2(dc.d);
+    }
+    var s = String(val||'').trim();
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(m) return m[3]+'-'+pad2(m[1])+'-'+pad2(m[2]);
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return m[1]+'-'+pad2(m[2])+'-'+pad2(m[3]);
+    return null;
+  }
+  function round2(n){ return Math.round((n+Number.EPSILON)*100)/100; }
+  /* Los archivos importados (auditados) tienen prioridad absoluta sobre cualquier
+     dato digitado manualmente: el registro manual solo existe como estimado previo
+     a la auditoría, así que al importar se reemplaza por completo el día, sin
+     mezclar ni conservar entradas manuales anteriores. */
+  function mergeImportedDay(dISO, min, usd, count, callList){
+    var nota = 'Importado de hoja de cálculo — auditado ('+count+' fila'+(count===1?'':'s')+')';
+    entries[dISO] = [{
+      id:'imp_'+dISO+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      min:round2(min), usd:round2(usd), nota:nota
+    }];
+    // El detalle por llamada también se reemplaza por completo para ese día (mismo criterio
+    // que las entradas agregadas: lo importado/auditado manda sobre cualquier carga previa).
+    calls[dISO] = callList;
+  }
+  function parseMoneyLoose(raw){
+    var s = String(raw==null?'':raw).replace(/[^0-9.\-]/g,'');
+    if(s==='') return NaN;
+    return parseFloat(s);
+  }
+  function importRowsToEntries(rows){
+    if(!rows || rows.length===0) return {days:0, rows:0};
+    var keys = Object.keys(rows[0]);
+    var dateKey = findKey(keys, DATE_ALIASES);
+    var minKey = findKey(keys, MIN_ALIASES);
+    var usdKey = findKey(keys, USD_ALIASES);
+    var adjKey = findKey(keys, ADJ_ALIASES);
+    var lineKey = findKey(keys, LINE_ALIASES);
+    var startKey = findKey(keys, STARTTIME_ALIASES);
+    var agentKey = findKey(keys, AGENT_ALIASES);
+    if(!dateKey || !minKey){ throw new Error('No se encontraron columnas de fecha/minutos.'); }
+    var byDay = {};
+    var rowsUsed = 0;
+    var agentCounts = {};
+    rows.forEach(function(row){
+      var dISO = parseDateFlexible(row[dateKey]);
+      if(!dISO) return;
+      var min = parseFloat(row[minKey]) || 0;
+      var usdRaw = usdKey ? String(row[usdKey]).replace(/[^0-9.\-]/g,'') : '';
+      var usd = usdRaw!=='' ? parseFloat(usdRaw) : min*cfg.ratePerMin;
+      if(isNaN(usd)) usd = 0;
+      var adjRaw = adjKey ? parseMoneyLoose(row[adjKey]) : NaN;
+      var adj = isNaN(adjRaw) ? 0 : adjRaw;
+      var line = lineKey ? String(row[lineKey]||'').trim() : '';
+      var hour = startKey ? parseHour12(row[startKey]) : null;
+      var segment = (hour!==null && hour!==undefined) ? segmentOfHour(hour) : null;
+      if(!byDay[dISO]) byDay[dISO] = {min:0, usd:0, count:0, calls:[]};
+      byDay[dISO].min += min;
+      byDay[dISO].usd += usd;
+      byDay[dISO].count += 1;
+      byDay[dISO].calls.push({min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment});
+      rowsUsed++;
+      if(agentKey){
+        var aid = String(row[agentKey]||'').trim();
+        if(aid){ agentCounts[aid] = (agentCounts[aid]||0)+1; }
+      }
+    });
+    var days = Object.keys(byDay);
+    days.forEach(function(dISO){
+      mergeImportedDay(dISO, byDay[dISO].min, byDay[dISO].usd, byDay[dISO].count, byDay[dISO].calls);
+    });
+    // Agent ID: se toma el más frecuente en el archivo importado.
+    var bestAgent = null, bestCount = 0;
+    Object.keys(agentCounts).forEach(function(aid){
+      if(agentCounts[aid] > bestCount){ bestCount = agentCounts[aid]; bestAgent = aid; }
+    });
+    if(bestAgent){ cfg.agentId = bestAgent; saveCfg(); renderAgentBadge(); }
+    return {days: days.length, rows: rowsUsed};
+  }
+  document.getElementById('fileImportSheet').addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    var status = document.getElementById('sheetImportStatus');
+    status.textContent = 'Procesando archivo…';
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var data = new Uint8Array(ev.target.result);
+        var wb = XLSX.read(data, {type:'array', cellDates:true});
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        var result = importRowsToEntries(rows);
+        saveEntries(); saveCalls(); renderAll();
+        status.textContent = 'Importado: '+result.days+' día(s), '+result.rows+' fila(s) procesadas y agregadas al histórico.'+(cfg.agentId ? ' Agent ID detectado: '+cfg.agentId+'.' : '');
+      }catch(err){
+        status.textContent = 'No se pudo leer el archivo. Verifica que tenga columnas de fecha y minutos.';
+      }
+      e.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  /* ---------- Item I: Respaldo en la nube (Google Drive) ----------
+     Nota honesta: como esta app no tiene servidor propio, la sincronización con
+     Google Drive requiere que el usuario cree su propio "OAuth Client ID" (gratis)
+     en Google Cloud Console y lo pegue en Ajustes. Sin eso, esta sección queda inactiva
+     y la app sigue funcionando igual con export/import manual de JSON. */
+  var gdriveTokenClient = null;
+  var gdriveAccessToken = null;
+  var gdriveScript = null;
+  function loadGISScript(cb){
+    if(window.google && window.google.accounts && window.google.accounts.oauth2){ cb(); return; }
+    if(gdriveScript){ gdriveScript.addEventListener('load', cb); return; }
+    gdriveScript = document.createElement('script');
+    gdriveScript.src = 'https://accounts.google.com/gsi/client';
+    gdriveScript.async = true;
+    gdriveScript.onload = cb;
+    gdriveScript.onerror = function(){ logError('loadGISScript', 'no se pudo cargar accounts.google.com/gsi/client'); alert('No se pudo cargar el script de Google. Verifica tu conexión.'); };
+    document.head.appendChild(gdriveScript);
+  }
+  function renderDriveStatus(){
+    var el = document.getElementById('driveStatus');
+    if(!el) return;
+    if(!cfg.driveClientId){ el.textContent = 'Sin conectar — pega tu Client ID de Google OAuth arriba.'; return; }
+    if(!gdriveAccessToken){ el.textContent = 'Client ID guardado. Pulsa "Conectar" para autorizar tu Google Drive.'; return; }
+    el.textContent = 'Conectado. '+(cfg.driveLastSync ? 'Último respaldo: '+fmtUpdated(cfg.driveLastSync)+'.' : 'Aún no se ha hecho un respaldo.');
+  }
+  function connectDrive(){
+    if(!cfg.driveClientId){ alert('Primero pega tu Client ID de Google OAuth en el campo de arriba y guarda.'); return; }
+    loadGISScript(function(){
+      try{
+        gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: cfg.driveClientId,
+          scope: 'https://www.googleapis.com/auth/drive.file',
+          callback: function(resp){
+            if(resp && resp.access_token){
+              gdriveAccessToken = resp.access_token;
+              renderDriveStatus();
+              document.getElementById('driveStatus').textContent = 'Conectado correctamente ✓';
+            } else {
+              logError('connectDrive:callback', JSON.stringify(resp));
+              alert('No se pudo autorizar con Google Drive.');
+            }
+          }
+        });
+        gdriveTokenClient.requestAccessToken();
+      }catch(e){
+        logError('connectDrive', e);
+        alert('Error al conectar con Google Drive. Revisa que el Client ID sea correcto y que este origen esté autorizado en Google Cloud Console.');
+      }
+    });
+  }
+  var DRIVE_FILENAME = 'bitacora-ciclo-backup.json';
+  function driveFindOrCreate(cb){
+    fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%27'+DRIVE_FILENAME+'%27%20and%20trashed%3Dfalse&spaces=drive&fields=files(id,name)', {
+      headers: {Authorization: 'Bearer '+gdriveAccessToken}
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if(data.files && data.files.length>0){ cfg.driveFileId = data.files[0].id; saveCfgSilent(); cb(cfg.driveFileId); }
+      else { cb(null); }
+    }).catch(function(e){ logError('driveFindOrCreate', e); cb(null); });
+  }
+  function saveCfgSilent(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); } // sin disparar auto-backup recursivo
+  function backupToDrive(silent){
+    if(!gdriveAccessToken){ if(!silent) alert('Conecta Google Drive primero.'); return; }
+    var payload = JSON.stringify({cfg:cfg, entries:entries, calls:calls, savedAt:new Date().toISOString()}, null, 2);
+    function doUpload(fileId){
+      var metadata = {name: DRIVE_FILENAME, mimeType:'application/json'};
+      var boundary = 'bitacora_boundary_'+Date.now();
+      var body =
+        '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
+        '--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+payload+'\r\n'+
+        '--'+boundary+'--';
+      var url = fileId
+        ? 'https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart'
+        : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      fetch(url, {
+        method: fileId ? 'PATCH' : 'POST',
+        headers: {Authorization:'Bearer '+gdriveAccessToken, 'Content-Type':'multipart/related; boundary='+boundary},
+        body: body
+      }).then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+        .then(function(data){
+          cfg.driveFileId = data.id || cfg.driveFileId;
+          cfg.driveLastSync = new Date().toISOString();
+          saveCfgSilent();
+          renderDriveStatus();
+          if(!silent) document.getElementById('driveStatus').textContent = 'Respaldo guardado ✓ ('+fmtUpdated(cfg.driveLastSync)+')';
+        }).catch(function(e){
+          logError('backupToDrive:upload', e);
+          if(!silent) alert('No se pudo respaldar a Google Drive. Es posible que el token haya expirado; pulsa "Conectar" de nuevo.');
+        });
+    }
+    if(cfg.driveFileId){ doUpload(cfg.driveFileId); } else { driveFindOrCreate(doUpload); }
+  }
+  function restoreFromDrive(){
+    if(!gdriveAccessToken){ alert('Conecta Google Drive primero.'); return; }
+    driveFindOrCreate(function(fileId){
+      if(!fileId){ alert('No se encontró un respaldo en tu Drive todavía.'); return; }
+      fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media', {headers:{Authorization:'Bearer '+gdriveAccessToken}})
+        .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+        .then(function(data){
+          if(!confirm('Esto reemplazará todo tu histórico local con el respaldo de Drive ('+(data.savedAt?fmtUpdated(data.savedAt):'fecha desconocida')+'). ¿Continuar?')) return;
+          if(data.cfg) cfg = Object.assign({}, DEFAULTS, data.cfg);
+          if(data.entries) entries = data.entries;
+          if(data.calls) calls = data.calls;
+          saveCfgSilent(); saveEntries(); saveCalls();
+          renderAgentBadge(); renderAll();
+          document.getElementById('driveStatus').textContent = 'Restaurado desde Drive ✓';
+        }).catch(function(e){
+          logError('restoreFromDrive', e);
+          alert('No se pudo restaurar desde Google Drive.');
+        });
+    });
+  }
+  var btnDriveConnectEl = document.getElementById('btnDriveConnect');
+  if(btnDriveConnectEl) btnDriveConnectEl.addEventListener('click', connectDrive);
+  var btnDriveBackupEl = document.getElementById('btnDriveBackup');
+  if(btnDriveBackupEl) btnDriveBackupEl.addEventListener('click', function(){ backupToDrive(false); });
+  var btnDriveRestoreEl = document.getElementById('btnDriveRestore');
+  if(btnDriveRestoreEl) btnDriveRestoreEl.addEventListener('click', restoreFromDrive);
+
+  var autoBackupTimer = null;
+  function scheduleAutoBackup(){
+    if(!cfg || !cfg.driveAuto || !gdriveAccessToken) return;
+    if(autoBackupTimer) clearTimeout(autoBackupTimer);
+    autoBackupTimer = setTimeout(function(){ backupToDrive(true); }, 4000); // debounce: espera 4s de inactividad
+  }
+
+  var btnViewLogEl = document.getElementById('btnViewLog');
+  if(btnViewLogEl){
+    btnViewLogEl.addEventListener('click', function(){
+      var log = [];
+      try{ log = JSON.parse(localStorage.getItem('bitacora_errlog')||'[]'); }catch(e){}
+      if(log.length===0){ alert('Sin errores registrados. ✓'); return; }
+      var txt = log.slice(-20).map(function(e){ return '['+fmtUpdated(e.t)+'] '+e.ctx+': '+e.msg; }).join('\n');
+      alert('Últimos '+Math.min(20,log.length)+' errores (de '+log.length+' totales):\n\n'+txt);
+    });
+  }
+
+  /* ---------- Render global ---------- */
+  function renderAll(){
+    renderHoy();
+    renderFooterStats();
+    renderAgentBadge();
+    if(document.getElementById('view-ciclo').classList.contains('active')) renderCiclo();
+    if(document.getElementById('view-reportes').classList.contains('active')) renderReportes();
+  }
+
+  renderAll();
+  updateExchangeRateAuto();
+
+  /* ---------- Item K: registro del Service Worker (PWA) ----------
+     Habilita instalación y funcionamiento offline del "shell" de la app. Ojo: esto NO
+     implica notificaciones push con la app totalmente cerrada — eso requiere un servidor
+     de push (p. ej. Firebase Cloud Messaging) que esta app, al no tener backend, no tiene.
+     Lo que sí gana con esto: abrir la app desde el ícono como si fuera nativa y que cargue
+     aunque no haya internet (los datos siguen viviendo en localStorage del dispositivo). */
+  if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(e){ logError('sw:register', e); });
+    });
+  }
+})();
+</script>
+</body>
+</html>
