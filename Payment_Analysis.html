@@ -365,6 +365,97 @@
   /* keep both floating widgets from overlapping tiny screens: shrink when narrow */
   @media (max-width:400px){.focus-widget,.cal-widget{width:150px;}.fw-time{font-size:18px;}.cal-day{font-size:9.5px;}}
 
+  /* ===== Widgets flotantes: arrastre desde cualquier zona no editable (req. 7),
+     tope de pantalla (req. 3) y redimensionado exclusivo por bordes/vértices (req. 4 y 5) ===== */
+  .widget-float{
+    display:flex;flex-direction:column;position:fixed;
+    max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
+    box-sizing:border-box;cursor:grab;user-select:none;touch-action:none;
+  }
+  .widget-float:active{cursor:grabbing;}
+  .widget-float .w-head{flex-shrink:0;}
+  .widget-float .w-body{
+    overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0;
+  }
+  .widget-float button{cursor:pointer;}
+  .widget-float input, .widget-float textarea{cursor:text;}
+  .w-head-btns{display:flex;align-items:center;gap:2px;}
+  .w-size-btn{
+    background:none;border:none;color:var(--ink-faint);cursor:pointer;
+    font-size:13px;width:20px;height:20px;line-height:1;border-radius:4px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .w-size-btn:hover{color:var(--accent);background:var(--panel-2);}
+
+  /* asas de redimensionado: bordes = un solo eje, vértices = proporcional (req. 5) */
+  .w-resize-handle{position:absolute;z-index:5;background:transparent;touch-action:none;}
+  .w-resize-n, .w-resize-s{left:12px;right:12px;height:10px;cursor:ns-resize;}
+  .w-resize-n{top:-5px;} .w-resize-s{bottom:-5px;}
+  .w-resize-e, .w-resize-w{top:12px;bottom:12px;width:10px;cursor:ew-resize;}
+  .w-resize-e{right:-5px;} .w-resize-w{left:-5px;}
+  .w-resize-ne, .w-resize-nw, .w-resize-se, .w-resize-sw{width:16px;height:16px;}
+  .w-resize-ne, .w-resize-sw{cursor:nesw-resize;}
+  .w-resize-nw, .w-resize-se{cursor:nwse-resize;}
+  .w-resize-ne{top:-5px;right:-5px;} .w-resize-sw{bottom:-5px;left:-5px;}
+  .w-resize-nw{top:-5px;left:-5px;} .w-resize-se{bottom:-5px;right:-5px;}
+
+  /* ===== Widget: Traductor ===== */
+  .tr-widget{
+    position:fixed;top:16px;right:16px;z-index:70;width:266px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+  }
+  .tr-head{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .tr-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
+  .tr-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
+  .tr-body{padding:12px;}
+  .tr-dir{display:flex;gap:4px;margin-bottom:8px;}
+  .tr-dir-btn{
+    flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-faint);
+    font-family:'Space Grotesk',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.02em;
+    padding:6px 4px;border-radius:5px;cursor:pointer;
+  }
+  .tr-dir-btn.active{background:var(--wire);color:var(--ink);border-color:var(--accent);}
+  #trText{width:100%;resize:none;font-family:'JetBrains Mono',monospace;font-size:12px;min-height:60px;}
+  .tr-auto-row{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10.5px;color:var(--ink-dim);}
+  .tr-auto-row input{width:auto;margin:0;}
+  .tr-inline-actions{display:flex;gap:6px;margin-top:6px;}
+  .tr-inline-actions .btn{flex:1;}
+  .tr-output-wrap{margin-top:8px;position:relative;}
+  #trOutput{
+    width:100%;min-height:60px;resize:none;font-family:'JetBrains Mono',monospace;font-size:12px;
+    background:var(--panel-2);border:1px solid var(--wire);color:var(--ink);
+  }
+  .tr-output-status{font-size:10px;color:var(--ink-faint);margin-top:4px;min-height:13px;}
+  .tr-output-status.err{color:var(--red);}
+  .tr-providers{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+  .tr-provider-btn{flex:0 0 auto;padding:5px 9px;font-size:10.5px;}
+  .tr-hint{font-size:10px;color:var(--ink-faint);margin-top:6px;line-height:1.5;}
+
+  /* ===== Widget: Notas rápidas ===== */
+  .nt-widget{
+    position:fixed;top:16px;left:16px;z-index:70;width:220px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+  }
+  .nt-head{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .nt-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
+  .nt-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
+  .nt-body{padding:12px;}
+  #ntText{width:100%;resize:none;font-family:'JetBrains Mono',monospace;font-size:12px;min-height:90px;}
+  @media (max-width:520px){.tr-widget{width:210px;top:10px;right:10px;}.nt-widget{width:180px;top:10px;left:10px;}}
+
+  /* calendario: días clicables para ingreso manual (req. 6) */
+  .cal-day.cal-day-clickable{cursor:pointer;}
+  .cal-day.cal-day-clickable:hover{box-shadow:inset 0 0 0 1px var(--accent);}
+
+  /* ===== Ajustes: sub-lista de widgets ===== */
+  .widget-toggle-list label{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);
+    text-transform:none;letter-spacing:0;padding:5px 0;
+  }
+  .widget-toggle-list input{width:auto;margin:0;}
+
   /* ===== Agent ID badge (parte superior central de la ventana) ===== */
   .agent-badge{
     position:fixed;top:14px;left:50%;transform:translateX(-50%);
@@ -432,13 +523,16 @@
 <body>
 
 <!-- ===================== TEMPORIZADOR FLOTANTE (visible en todas las pestañas) ===================== -->
-<div class="focus-widget" id="focusWidget">
-  <div class="fw-head">
+<div class="focus-widget widget-float" id="focusWidget">
+  <div class="fw-head w-head">
     <span class="fw-dot" id="fwDot"></span>
     <span class="fw-label" id="fwLabel">Temporizador</span>
-    <button class="fw-collapse" id="fwCollapse" title="Minimizar/expandir">▾</button>
+    <div class="w-head-btns">
+      <button class="w-size-btn" id="fwWidgetReset" title="Restablecer tamaño y posición">⟲</button>
+      <button class="fw-collapse" id="fwCollapse" title="Minimizar/expandir">▾</button>
+    </div>
   </div>
-  <div class="fw-body" id="fwBody">
+  <div class="fw-body w-body" id="fwBody">
     <div class="fw-modes">
       <button class="fw-mode active" data-mode="down" id="fwModeDown">Cuenta regresiva</button>
       <button class="fw-mode" data-mode="up" id="fwModeUp">Cuenta progresiva</button>
@@ -457,13 +551,16 @@
 </div>
 
 <!-- ===================== CALENDARIO FLOTANTE (visible en todas las pestañas) ===================== -->
-<div class="cal-widget" id="calWidget">
-  <div class="cal-head">
+<div class="cal-widget widget-float" id="calWidget">
+  <div class="cal-head w-head">
     <span class="cal-mark"></span>
     <span class="cal-label">Calendario del ciclo</span>
-    <button class="cal-collapse" id="calCollapse" title="Minimizar/expandir">▾</button>
+    <div class="w-head-btns">
+      <button class="w-size-btn" id="calWidgetReset" title="Restablecer tamaño y posición">⟲</button>
+      <button class="cal-collapse" id="calCollapse" title="Minimizar/expandir">▾</button>
+    </div>
   </div>
-  <div class="cal-body" id="calBody">
+  <div class="cal-body w-body" id="calBody">
     <div class="cal-nav">
       <button class="cal-nav-btn" id="calPrev">‹</button>
       <span class="cal-month" id="calMonthLabel">—</span>
@@ -473,6 +570,59 @@
     <div class="cal-legend">
       <span><i style="background:var(--amber-dim);border:1px solid var(--amber)"></i> Ciclo actual</span>
       <span><i style="background:var(--green-dim);border:2px solid var(--accent)"></i> Hoy</span>
+    </div>
+    <div class="tr-hint">Clic en cualquier día para agregar minutos manualmente.</div>
+  </div>
+</div>
+
+<!-- ===================== TRADUCTOR FLOTANTE (visible en todas las pestañas) ===================== -->
+<div class="tr-widget widget-float" id="translatorWidget">
+  <div class="tr-head w-head" id="trHead">
+    <span class="tr-mark"></span>
+    <span class="tr-label">Traductor</span>
+    <div class="w-head-btns">
+      <button class="w-size-btn" id="trWidgetReset" title="Restablecer tamaño y posición">⟲</button>
+      <button class="cal-collapse" id="trCollapse" title="Minimizar/expandir">▾</button>
+    </div>
+  </div>
+  <div class="tr-body w-body" id="trBody">
+    <div class="tr-dir">
+      <button class="tr-dir-btn active" id="trDirEsEn">ES → EN</button>
+      <button class="tr-dir-btn" id="trDirEnEs">EN → ES</button>
+    </div>
+    <textarea id="trText" rows="3" placeholder="Escribe o pega el texto a traducir…"></textarea>
+    <div class="tr-auto-row">
+      <input type="checkbox" id="trAutoToggle"><label for="trAutoToggle">Auto-traducir mientras escribo</label>
+    </div>
+    <div class="tr-inline-actions">
+      <button class="btn sm" id="trTranslateNow">Traducir aquí</button>
+      <button class="btn ghost sm" id="trCopy">⧉ Copiar texto</button>
+    </div>
+    <div class="tr-output-wrap">
+      <textarea id="trOutput" rows="3" placeholder="La traducción aparecerá aquí…" readonly></textarea>
+      <div class="tr-output-status" id="trOutputStatus"></div>
+      <button class="btn ghost sm" id="trCopyOutput" style="width:100%;margin-top:4px;display:none;">⧉ Copiar traducción</button>
+    </div>
+    <div class="tr-providers" id="trProviders"></div>
+    <div class="tr-hint">El proveedor por defecto es MyMemory (gratuito). Para textos largos o mayor calidad, usa los botones de abajo — copian el texto y abren el proveedor en una pestaña nueva.</div>
+  </div>
+</div>
+
+<!-- ===================== NOTAS RÁPIDAS FLOTANTE (visible en todas las pestañas) ===================== -->
+<div class="nt-widget widget-float" id="notesWidget">
+  <div class="nt-head w-head" id="ntHead">
+    <span class="nt-mark"></span>
+    <span class="nt-label">Notas rápidas</span>
+    <div class="w-head-btns">
+      <button class="w-size-btn" id="ntWidgetReset" title="Restablecer tamaño y posición">⟲</button>
+      <button class="cal-collapse" id="ntCollapse" title="Minimizar/expandir">▾</button>
+    </div>
+  </div>
+  <div class="nt-body w-body" id="ntBody">
+    <textarea id="ntText" rows="5" placeholder="Anota cualquier cosa…"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+      <span class="rate-status" id="ntSavedHint" style="margin:0;">—</span>
+      <button class="btn ghost sm" id="ntClear">🗑 Borrar</button>
     </div>
   </div>
 </div>
@@ -729,22 +879,21 @@
       </div>
 
       <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
-        <label>Respaldo en la nube (Google Drive)</label>
-        <div class="rate-status">Requiere un Client ID de OAuth propio (gratis, se crea en Google Cloud Console → APIs &amp; Services → Credentials, tipo "Web application"). Esto es necesario porque la app corre sin servidor; tus datos solo se suben a tu propio Drive.</div>
-        <input type="text" id="cfgDriveClientId" placeholder="Client ID de Google OAuth (termina en .apps.googleusercontent.com)" style="margin-top:8px;width:100%;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-          <button class="btn ghost sm" id="btnDriveConnect">🔗 Conectar</button>
-          <button class="btn ghost sm" id="btnDriveBackup">☁ Respaldar ahora</button>
-          <button class="btn ghost sm" id="btnDriveRestore">⤓ Restaurar de Drive</button>
+        <label>Widgets flotantes</label>
+        <div class="rate-status">Actívalos o desactívalos aquí. Arrástralos desde cualquier zona no editable del widget para reubicarlos, y desde sus bordes o vértices para cambiar su tamaño. El botón ⟲ del encabezado restablece el tamaño y la posición de ese widget.</div>
+        <div class="widget-toggle-list">
+          <label><input type="checkbox" id="cfgWTimer">Temporizador</label>
+          <label><input type="checkbox" id="cfgWCalendar">Calendario del ciclo</label>
+          <label><input type="checkbox" id="cfgWTranslator">Traductor</label>
+          <label><input type="checkbox" id="cfgWNotes">Notas rápidas</label>
         </div>
-        <label style="margin-top:8px;display:block;"><input type="checkbox" id="cfgDriveAuto" style="width:auto;margin-right:6px;">Respaldo automático tras cada cambio</label>
-        <div class="rate-status" id="driveStatus">Sin conectar.</div>
+        <button class="btn ghost sm" id="btnResetWidgets" style="margin-top:6px;">↺ Restablecer posición y tamaño de widgets</button>
       </div>
 
       <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
         <label>Restablecer aplicación</label>
         <button class="btn ghost sm" id="btnReset" style="border-color:#5a3229;color:var(--red);">↺ Restablecer a valores por defecto</button>
-        <div class="rate-status">Borra todo el histórico y restaura: meta diaria 480 min, meta de ciclo $570, tarifa $0.12/min, título "Payment Analysis Propio", barra lineal. No se puede deshacer.</div>
+        <div class="rate-status">Borra todo el histórico y restaura: meta diaria 480 min, meta de ciclo $570, tarifa $0.12/min, título "Payment Analysis Propio", barra lineal, y la posición/tamaño de los widgets. No se puede deshacer.</div>
       </div>
       <div class="modal-actions" style="justify-content:flex-start;">
         <button class="btn ghost sm" id="btnViewLog">🐞 Ver log de errores</button>
@@ -818,11 +967,17 @@
     notifDaily: true,
     notifStart: true,
     notifLowPace: true,
-    // ---- Respaldo en la nube (Google Drive) ----
-    driveClientId: '',
-    driveFileId: null,
-    driveLastSync: null,
-    driveAuto: false
+    // ---- Widgets flotantes: activos, posición y tamaño en px (null = por defecto) ----
+    widgets: {
+      timer:      {enabled:true, x:null, y:null, width:null, height:null},
+      calendar:   {enabled:true, x:null, y:null, width:null, height:null},
+      translator: {enabled:true, x:null, y:null, width:null, height:null},
+      notes:      {enabled:true, x:null, y:null, width:null, height:null}
+    },
+    // ---- Notas rápidas ----
+    quickNotes: '',
+    // ---- Traductor: preferencia de auto-traducir mientras se escribe ----
+    trAutoTranslate: false
   };
   var ANCHOR = new Date('2026-05-30T00:00:00'); // sábado de referencia (inicio de ciclo confirmado)
   var DAY_MS = 86400000;
@@ -830,6 +985,15 @@
 
   /* ---------- Estado ---------- */
   var cfg = loadJSON('bitacora_cfg', DEFAULTS);
+  /* loadJSON hace merge superficial: si el respaldo guardado en localStorage no
+     conoce todavía alguno de los widgets nuevos (p. ej. Traductor/Notas, agregados
+     después), hay que rellenar sus valores por defecto uno por uno. */
+  (function ensureWidgetDefaults(){
+    if(!cfg.widgets) cfg.widgets = {};
+    Object.keys(DEFAULTS.widgets).forEach(function(k){
+      cfg.widgets[k] = Object.assign({}, DEFAULTS.widgets[k], cfg.widgets[k]||{});
+    });
+  })();
   var entries = loadJSON('bitacora_entries', {}); // { 'YYYY-MM-DD': [{id,min,nota,usd?}, ...] }
   /* Detalle por llamada (solo se llena al importar hoja de cálculo). Se usa para los
      desgloses del reporte de ciclo: llamada vs ajuste, audio vs video, segmento del día.
@@ -861,9 +1025,9 @@
       return Object.assign({}, fallback, parsed);
     }catch(e){ return JSON.parse(JSON.stringify(fallback)); }
   }
-  function saveCfg(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); scheduleAutoBackup(); }
-  function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); scheduleAutoBackup(); }
-  function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); scheduleAutoBackup(); }
+  function saveCfg(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); }
+  function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); }
+  function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); }
 
   /* ---------- Log de errores (item C) ----------
      Guarda un histórico corto de errores para depuración, sin interrumpir al usuario. */
@@ -1326,9 +1490,12 @@
     document.getElementById('fwReset').addEventListener('click', reset);
     document.getElementById('fwCollapse').addEventListener('click', function(){
       var body = document.getElementById('fwBody');
+      var widgetEl = document.getElementById('focusWidget');
       var willHide = body.style.display !== 'none';
       body.style.display = willHide ? 'none' : 'block';
       document.getElementById('fwCollapse').textContent = willHide ? '▸' : '▾';
+      if(willHide){ widgetEl.dataset.prevHeight = widgetEl.style.height || ''; widgetEl.style.height = ''; }
+      else { widgetEl.style.height = widgetEl.dataset.prevHeight || ''; }
     });
 
     updateDisplay();
@@ -1383,9 +1550,17 @@
         if(!c.inMonth) cls += ' other-month';
         if(inRange(c.date, cycleStart, cycleEnd)) cls += ' in-cycle';
         if(iso(c.date)===iso(today)) cls += ' today';
+        cls += ' cal-day-clickable';
         el.className = cls;
         el.textContent = c.date.getDate();
-        el.title = c.date.toLocaleDateString('es-HN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+        el.title = 'Clic para editar minutos — '+c.date.toLocaleDateString('es-HN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+        el.addEventListener('click', (function(d){
+          return function(){
+            var cs = cycleStartFor(d);
+            var dayNum = dayIndexInCycle(d, cs);
+            openDayEditor(iso(d), dayNum);
+          };
+        })(c.date));
         grid.appendChild(el);
       });
     }
@@ -1399,9 +1574,12 @@
     });
     document.getElementById('calCollapse').addEventListener('click', function(){
       var body = document.getElementById('calBody');
+      var widgetEl = document.getElementById('calWidget');
       var willHide = body.style.display !== 'none';
       body.style.display = willHide ? 'none' : 'block';
       document.getElementById('calCollapse').textContent = willHide ? '▸' : '▾';
+      if(willHide){ widgetEl.dataset.prevHeight = widgetEl.style.height || ''; widgetEl.style.height = ''; }
+      else { widgetEl.style.height = widgetEl.dataset.prevHeight || ''; }
     });
     render();
   })();
@@ -2176,10 +2354,11 @@
     document.getElementById('cfgNotifDaily').checked = !!cfg.notifDaily;
     document.getElementById('cfgNotifStart').checked = !!cfg.notifStart;
     document.getElementById('cfgNotifLowPace').checked = !!cfg.notifLowPace;
-    document.getElementById('cfgDriveClientId').value = cfg.driveClientId||'';
-    document.getElementById('cfgDriveAuto').checked = !!cfg.driveAuto;
+    document.getElementById('cfgWTimer').checked = !!cfg.widgets.timer.enabled;
+    document.getElementById('cfgWCalendar').checked = !!cfg.widgets.calendar.enabled;
+    document.getElementById('cfgWTranslator').checked = !!cfg.widgets.translator.enabled;
+    document.getElementById('cfgWNotes').checked = !!cfg.widgets.notes.enabled;
     renderNotifPermStatus();
-    renderDriveStatus();
     modal.classList.add('open');
     modalScroll.scrollTop = 0;
     setTimeout(updateModalScrollBtns, 0);
@@ -2242,9 +2421,14 @@
     cfg.notifDaily = document.getElementById('cfgNotifDaily').checked;
     cfg.notifStart = document.getElementById('cfgNotifStart').checked;
     cfg.notifLowPace = document.getElementById('cfgNotifLowPace').checked;
-    cfg.driveClientId = document.getElementById('cfgDriveClientId').value.trim();
-    cfg.driveAuto = document.getElementById('cfgDriveAuto').checked;
+    cfg.widgets.timer.enabled = document.getElementById('cfgWTimer').checked;
+    cfg.widgets.calendar.enabled = document.getElementById('cfgWCalendar').checked;
+    cfg.widgets.translator.enabled = document.getElementById('cfgWTranslator').checked;
+    cfg.widgets.notes.enabled = document.getElementById('cfgWNotes').checked;
     saveCfg();
+    Object.keys(WIDGET_ELS).forEach(function(k){
+      WIDGET_ELS[k].style.display = cfg.widgets[k].enabled ? '' : 'none';
+    });
     modal.classList.remove('open');
     renderAll();
   });
@@ -2422,130 +2606,323 @@
     reader.readAsArrayBuffer(file);
   });
 
-  /* ---------- Item I: Respaldo en la nube (Google Drive) ----------
-     Nota honesta: como esta app no tiene servidor propio, la sincronización con
-     Google Drive requiere que el usuario cree su propio "OAuth Client ID" (gratis)
-     en Google Cloud Console y lo pegue en Ajustes. Sin eso, esta sección queda inactiva
-     y la app sigue funcionando igual con export/import manual de JSON. */
-  var gdriveTokenClient = null;
-  var gdriveAccessToken = null;
-  var gdriveScript = null;
-  function loadGISScript(cb){
-    if(window.google && window.google.accounts && window.google.accounts.oauth2){ cb(); return; }
-    if(gdriveScript){ gdriveScript.addEventListener('load', cb); return; }
-    gdriveScript = document.createElement('script');
-    gdriveScript.src = 'https://accounts.google.com/gsi/client';
-    gdriveScript.async = true;
-    gdriveScript.onload = cb;
-    gdriveScript.onerror = function(){ logError('loadGISScript', 'no se pudo cargar accounts.google.com/gsi/client'); alert('No se pudo cargar el script de Google. Verifica tu conexión.'); };
-    document.head.appendChild(gdriveScript);
-  }
-  function renderDriveStatus(){
-    var el = document.getElementById('driveStatus');
+  /* ---------- Widgets flotantes: arrastre, redimensionado por bordes y activar/desactivar
+     (req. 1 activación ya existente, 3 tope de pantalla, 4 redimensionado solo por bordes,
+     5 vertical/horizontal/proporcional, 7 arrastre desde toda zona no editable, 8 reset individual) ---------- */
+  var WIDGET_DEFS = [
+    {key:'timer',      elId:'focusWidget',      resetId:'fwWidgetReset'},
+    {key:'calendar',   elId:'calWidget',        resetId:'calWidgetReset'},
+    {key:'translator', elId:'translatorWidget', resetId:'trWidgetReset'},
+    {key:'notes',      elId:'notesWidget',      resetId:'ntWidgetReset'}
+  ];
+  var WIDGET_ELS = {}; // key -> DOM element, usado también por Ajustes para mostrar/ocultar al vuelo
+  var WIDGET_MIN_W = 170, WIDGET_MIN_H = 150;
+  var RESIZE_DIRS = ['n','s','e','w','ne','nw','se','sw'];
+
+  function initWidgetChrome(def){
+    var el = document.getElementById(def.elId);
     if(!el) return;
-    if(!cfg.driveClientId){ el.textContent = 'Sin conectar — pega tu Client ID de Google OAuth arriba.'; return; }
-    if(!gdriveAccessToken){ el.textContent = 'Client ID guardado. Pulsa "Conectar" para autorizar tu Google Drive.'; return; }
-    el.textContent = 'Conectado. '+(cfg.driveLastSync ? 'Último respaldo: '+fmtUpdated(cfg.driveLastSync)+'.' : 'Aún no se ha hecho un respaldo.');
+    WIDGET_ELS[def.key] = el;
+    var w = cfg.widgets[def.key];
+
+    function applyEnabled(){ el.style.display = w.enabled ? '' : 'none'; }
+    function applySize(){
+      if(w.width!=null) el.style.width = w.width+'px';
+      if(w.height!=null) el.style.height = w.height+'px';
+    }
+    function applyPosition(){
+      if(w.x!=null && w.y!=null){
+        el.style.left = w.x+'px'; el.style.top = w.y+'px';
+        el.style.right = 'auto'; el.style.bottom = 'auto';
+      }
+    }
+    /* asegura que el widget quede completamente dentro de la pantalla (req. 3) */
+    function clampToViewport(){
+      var rect = el.getBoundingClientRect();
+      if(!rect.width || !rect.height) return;
+      var maxLeft = Math.max(4, window.innerWidth - rect.width - 4);
+      var maxTop = Math.max(4, window.innerHeight - rect.height - 4);
+      var nl = Math.min(Math.max(4, rect.left), maxLeft);
+      var nt = Math.min(Math.max(4, rect.top), maxTop);
+      if(Math.abs(nl-rect.left)>0.5 || Math.abs(nt-rect.top)>0.5){
+        el.style.left = nl+'px'; el.style.top = nt+'px';
+        el.style.right = 'auto'; el.style.bottom = 'auto';
+      }
+    }
+    function persist(){
+      var rect = el.getBoundingClientRect();
+      w.x = rect.left; w.y = rect.top;
+      if(el.style.width) w.width = rect.width;
+      if(el.style.height) w.height = rect.height;
+      saveCfg();
+    }
+
+    applyEnabled(); applySize(); applyPosition();
+    requestAnimationFrame(clampToViewport);
+    window.addEventListener('resize', clampToViewport);
+
+    /* --- arrastre para mover: cualquier zona no editable del widget, encabezado o cuerpo (req. 7) --- */
+    var dragging=false, startX=0, startY=0, origLeft=0, origTop=0;
+    el.addEventListener('pointerdown', function(e){
+      if(e.target.closest('button, input, textarea, select, a, .w-resize-handle, .cal-day-clickable')) return;
+      dragging = true;
+      var rect = el.getBoundingClientRect();
+      origLeft = rect.left; origTop = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    el.addEventListener('pointermove', function(e){
+      if(!dragging) return;
+      var dx = e.clientX - startX, dy = e.clientY - startY;
+      var rect = el.getBoundingClientRect();
+      var nl = Math.max(4, Math.min(window.innerWidth - rect.width - 4, origLeft + dx));
+      var nt = Math.max(4, Math.min(window.innerHeight - rect.height - 4, origTop + dy));
+      el.style.left = nl+'px'; el.style.top = nt+'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
+    });
+    el.addEventListener('pointerup', function(e){
+      if(!dragging) return;
+      dragging = false;
+      try{ el.releasePointerCapture(e.pointerId); }catch(err){}
+      persist();
+    });
+    el.addEventListener('pointercancel', function(){ dragging = false; });
+
+    /* --- redimensionado: bordes = un solo eje, vértices = proporcional (req. 4 y 5) --- */
+    RESIZE_DIRS.forEach(function(dir){
+      var handle = document.createElement('div');
+      handle.className = 'w-resize-handle w-resize-'+dir;
+      el.appendChild(handle);
+
+      var resizing=false, sX=0, sY=0, sRect=null, aspect=1;
+      handle.addEventListener('pointerdown', function(e){
+        e.stopPropagation();
+        resizing = true;
+        sX = e.clientX; sY = e.clientY;
+        sRect = el.getBoundingClientRect();
+        aspect = sRect.width / Math.max(1, sRect.height);
+        try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+      });
+      handle.addEventListener('pointermove', function(e){
+        if(!resizing) return;
+        var dx = e.clientX - sX, dy = e.clientY - sY;
+        var newW = sRect.width, newH = sRect.height, newL = sRect.left, newT = sRect.top;
+        var isCorner = dir.length===2;
+
+        if(isCorner){
+          /* vértice: redimensiona proporcionalmente a la relación alto/largo original */
+          var signX = (dir.indexOf('e')>=0) ? 1 : -1;
+          var signY = (dir.indexOf('s')>=0) ? 1 : -1;
+          var delta = Math.abs(dx) > Math.abs(dy) ? dx*signX : dy*signY;
+          newW = Math.max(WIDGET_MIN_W, sRect.width + delta);
+          newH = newW / aspect;
+          if(newH < WIDGET_MIN_H){ newH = WIDGET_MIN_H; newW = newH*aspect; }
+          if(dir.indexOf('w')>=0) newL = sRect.left + (sRect.width - newW);
+          if(dir.indexOf('n')>=0) newT = sRect.top + (sRect.height - newH);
+        } else if(dir==='e'){ newW = Math.max(WIDGET_MIN_W, sRect.width + dx);
+        } else if(dir==='w'){ newW = Math.max(WIDGET_MIN_W, sRect.width - dx); newL = sRect.left + (sRect.width - newW);
+        } else if(dir==='s'){ newH = Math.max(WIDGET_MIN_H, sRect.height + dy);
+        } else if(dir==='n'){ newH = Math.max(WIDGET_MIN_H, sRect.height - dy); newT = sRect.top + (sRect.height - newH); }
+
+        /* no permitir que el widget salga de los límites de la pantalla (req. 3) */
+        newW = Math.min(newW, window.innerWidth - 8);
+        newH = Math.min(newH, window.innerHeight - 8);
+        newL = Math.max(4, Math.min(newL, window.innerWidth - newW - 4));
+        newT = Math.max(4, Math.min(newT, window.innerHeight - newH - 4));
+
+        el.style.width = newW+'px'; el.style.height = newH+'px';
+        el.style.left = newL+'px'; el.style.top = newT+'px';
+        el.style.right = 'auto'; el.style.bottom = 'auto';
+      });
+      handle.addEventListener('pointerup', function(e){
+        if(!resizing) return;
+        resizing = false;
+        try{ handle.releasePointerCapture(e.pointerId); }catch(err){}
+        persist();
+      });
+      handle.addEventListener('pointercancel', function(){ resizing = false; });
+    });
+
+    /* --- botón de reset individual: restablece tamaño y posición de este widget (req. 8) --- */
+    var resetBtn = document.getElementById(def.resetId);
+    if(resetBtn) resetBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      w.x = null; w.y = null; w.width = null; w.height = null;
+      el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = '';
+      el.style.width = ''; el.style.height = '';
+      saveCfg();
+    });
   }
-  function connectDrive(){
-    if(!cfg.driveClientId){ alert('Primero pega tu Client ID de Google OAuth en el campo de arriba y guarda.'); return; }
-    loadGISScript(function(){
-      try{
-        gdriveTokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: cfg.driveClientId,
-          scope: 'https://www.googleapis.com/auth/drive.file',
-          callback: function(resp){
-            if(resp && resp.access_token){
-              gdriveAccessToken = resp.access_token;
-              renderDriveStatus();
-              document.getElementById('driveStatus').textContent = 'Conectado correctamente ✓';
-            } else {
-              logError('connectDrive:callback', JSON.stringify(resp));
-              alert('No se pudo autorizar con Google Drive.');
-            }
-          }
-        });
-        gdriveTokenClient.requestAccessToken();
-      }catch(e){
-        logError('connectDrive', e);
-        alert('Error al conectar con Google Drive. Revisa que el Client ID sea correcto y que este origen esté autorizado en Google Cloud Console.');
+  WIDGET_DEFS.forEach(initWidgetChrome);
+
+  document.getElementById('btnResetWidgets').addEventListener('click', function(){
+    Object.keys(cfg.widgets).forEach(function(k){
+      cfg.widgets[k].x = null; cfg.widgets[k].y = null;
+      cfg.widgets[k].width = null; cfg.widgets[k].height = null;
+    });
+    saveCfg();
+    location.reload();
+  });
+
+  /* ---------- Widget: Traductor (req. 2) ---------- */
+  (function initTranslatorWidget(){
+    var trDir = 'es-en';
+    var dirEsEn = document.getElementById('trDirEsEn');
+    var dirEnEs = document.getElementById('trDirEnEs');
+    dirEsEn.addEventListener('click', function(){ trDir='es-en'; dirEsEn.classList.add('active'); dirEnEs.classList.remove('active'); });
+    dirEnEs.addEventListener('click', function(){ trDir='en-es'; dirEnEs.classList.add('active'); dirEsEn.classList.remove('active'); });
+
+    function copyToClipboard(text){
+      try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text); }catch(e){}
+    }
+
+    /* --- Traducción dentro de la app (sin salir del navegador), vía MyMemory ---
+       API pública y gratuita, sin clave, con CORS abierto. Límite aprox. 5,000
+       palabras/día por IP y calidad más básica que un motor neuronal (DeepL/Google);
+       para textos largos o de mayor calidad se recomiendan los botones de proveedores. */
+    var outputEl = document.getElementById('trOutput');
+    var statusEl = document.getElementById('trOutputStatus');
+    var copyOutputBtn = document.getElementById('trCopyOutput');
+    var autoToggle = document.getElementById('trAutoToggle');
+    autoToggle.checked = !!cfg.trAutoTranslate;
+    autoToggle.addEventListener('change', function(){
+      cfg.trAutoTranslate = autoToggle.checked;
+      saveCfg();
+    });
+    var translateNowBtn = document.getElementById('trTranslateNow');
+    var autoTimer = null;
+    var reqSeq = 0;
+
+    function setStatus(msg, isErr){
+      statusEl.textContent = msg || '';
+      statusEl.classList.toggle('err', !!isErr);
+    }
+
+    function runTranslate(){
+      var text = document.getElementById('trText').value.trim();
+      if(!text){
+        outputEl.value = '';
+        copyOutputBtn.style.display = 'none';
+        setStatus('');
+        return;
+      }
+      var sl = trDir==='es-en' ? 'es' : 'en';
+      var tl = trDir==='es-en' ? 'en' : 'es';
+      var mySeq = ++reqSeq;
+      setStatus('Traduciendo…');
+      var url = 'https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair='+sl+'|'+tl;
+      fetch(url).then(function(r){
+        if(!r.ok) throw new Error('http '+r.status);
+        return r.json();
+      }).then(function(data){
+        if(mySeq !== reqSeq) return; // respuesta obsoleta (el texto ya cambió)
+        var translated = data && data.responseData && data.responseData.translatedText;
+        if(!translated){ throw new Error('respuesta vacía'); }
+        outputEl.value = translated;
+        copyOutputBtn.style.display = '';
+        setStatus(data.responseData.match!=null ? 'Traducido (confianza ~'+Math.round(data.responseData.match*100)+'%)' : 'Traducido ✓');
+      }).catch(function(e){
+        if(mySeq !== reqSeq) return;
+        logError('trTranslate', e);
+        outputEl.value = '';
+        copyOutputBtn.style.display = 'none';
+        setStatus('No se pudo traducir aquí (límite diario o sin conexión). Usa uno de los proveedores de abajo.', true);
+      });
+    }
+
+    translateNowBtn.addEventListener('click', runTranslate);
+    document.getElementById('trText').addEventListener('input', function(){
+      if(!autoToggle.checked) return;
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(runTranslate, 700);
+    });
+    dirEsEn.addEventListener('click', function(){ if(document.getElementById('trText').value.trim()) runTranslate(); });
+    dirEnEs.addEventListener('click', function(){ if(document.getElementById('trText').value.trim()) runTranslate(); });
+    copyOutputBtn.addEventListener('click', function(){
+      copyToClipboard(outputEl.value);
+      var orig = copyOutputBtn.textContent;
+      copyOutputBtn.textContent = '✓ Copiado';
+      setTimeout(function(){ copyOutputBtn.textContent = orig; }, 1200);
+    });
+
+    var PROVIDERS = [
+      {name:'Google Translate', build:function(text, dir){
+        var sl = dir==='es-en'?'es':'en', tl = dir==='es-en'?'en':'es';
+        return 'https://translate.google.com/?sl='+sl+'&tl='+tl+'&text='+encodeURIComponent(text)+'&op=translate&hl=es';
+      }},
+      {name:'DeepL', build:function(text, dir){
+        var sl = dir==='es-en'?'es':'en', tl = dir==='es-en'?'en':'es';
+        return 'https://www.deepl.com/translator#'+sl+'/'+tl+'/'+encodeURIComponent(text);
+      }},
+      {name:'QuillBot', build:function(){ return 'https://quillbot.com/es/traductor'; }}
+    ];
+
+    var box = document.getElementById('trProviders');
+    PROVIDERS.forEach(function(p){
+      var b = document.createElement('button');
+      b.className = 'btn ghost sm tr-provider-btn';
+      b.textContent = p.name;
+      b.addEventListener('click', function(){
+        var text = document.getElementById('trText').value.trim();
+        if(text) copyToClipboard(text);
+        window.open(p.build(text, trDir), '_blank', 'noopener');
+      });
+      box.appendChild(b);
+    });
+
+    document.getElementById('trCopy').addEventListener('click', function(){
+      var text = document.getElementById('trText').value.trim();
+      if(!text) return;
+      copyToClipboard(text);
+      var btn = document.getElementById('trCopy');
+      var orig = btn.textContent;
+      btn.textContent = '✓ Copiado';
+      setTimeout(function(){ btn.textContent = orig; }, 1200);
+    });
+
+    document.getElementById('trCollapse').addEventListener('click', function(){
+      var body = document.getElementById('trBody');
+      var widgetEl = document.getElementById('translatorWidget');
+      var willHide = body.style.display !== 'none';
+      body.style.display = willHide ? 'none' : 'block';
+      document.getElementById('trCollapse').textContent = willHide ? '▸' : '▾';
+      if(willHide){ widgetEl.dataset.prevHeight = widgetEl.style.height || ''; widgetEl.style.height = ''; }
+      else { widgetEl.style.height = widgetEl.dataset.prevHeight || ''; }
+    });
+  })();
+
+  /* ---------- Widget: Notas rápidas (req. 3) ---------- */
+  (function initNotesWidget(){
+    var ta = document.getElementById('ntText');
+    var hint = document.getElementById('ntSavedHint');
+    ta.value = cfg.quickNotes || '';
+    hint.textContent = ta.value ? 'Guardado ✓' : '—';
+    var saveTimer = null;
+    ta.addEventListener('input', function(){
+      hint.textContent = 'Escribiendo…';
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function(){
+        cfg.quickNotes = ta.value;
+        saveCfg();
+        hint.textContent = 'Guardado ✓';
+      }, 600);
+    });
+    document.getElementById('ntClear').addEventListener('click', function(){
+      if(!ta.value || confirm('¿Borrar todas las notas rápidas?')){
+        ta.value = ''; cfg.quickNotes = ''; saveCfg();
+        hint.textContent = '—';
       }
     });
-  }
-  var DRIVE_FILENAME = 'bitacora-ciclo-backup.json';
-  function driveFindOrCreate(cb){
-    fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%27'+DRIVE_FILENAME+'%27%20and%20trashed%3Dfalse&spaces=drive&fields=files(id,name)', {
-      headers: {Authorization: 'Bearer '+gdriveAccessToken}
-    }).then(function(r){ return r.json(); }).then(function(data){
-      if(data.files && data.files.length>0){ cfg.driveFileId = data.files[0].id; saveCfgSilent(); cb(cfg.driveFileId); }
-      else { cb(null); }
-    }).catch(function(e){ logError('driveFindOrCreate', e); cb(null); });
-  }
-  function saveCfgSilent(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); } // sin disparar auto-backup recursivo
-  function backupToDrive(silent){
-    if(!gdriveAccessToken){ if(!silent) alert('Conecta Google Drive primero.'); return; }
-    var payload = JSON.stringify({cfg:cfg, entries:entries, calls:calls, savedAt:new Date().toISOString()}, null, 2);
-    function doUpload(fileId){
-      var metadata = {name: DRIVE_FILENAME, mimeType:'application/json'};
-      var boundary = 'bitacora_boundary_'+Date.now();
-      var body =
-        '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
-        '--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+payload+'\r\n'+
-        '--'+boundary+'--';
-      var url = fileId
-        ? 'https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart'
-        : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      fetch(url, {
-        method: fileId ? 'PATCH' : 'POST',
-        headers: {Authorization:'Bearer '+gdriveAccessToken, 'Content-Type':'multipart/related; boundary='+boundary},
-        body: body
-      }).then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
-        .then(function(data){
-          cfg.driveFileId = data.id || cfg.driveFileId;
-          cfg.driveLastSync = new Date().toISOString();
-          saveCfgSilent();
-          renderDriveStatus();
-          if(!silent) document.getElementById('driveStatus').textContent = 'Respaldo guardado ✓ ('+fmtUpdated(cfg.driveLastSync)+')';
-        }).catch(function(e){
-          logError('backupToDrive:upload', e);
-          if(!silent) alert('No se pudo respaldar a Google Drive. Es posible que el token haya expirado; pulsa "Conectar" de nuevo.');
-        });
-    }
-    if(cfg.driveFileId){ doUpload(cfg.driveFileId); } else { driveFindOrCreate(doUpload); }
-  }
-  function restoreFromDrive(){
-    if(!gdriveAccessToken){ alert('Conecta Google Drive primero.'); return; }
-    driveFindOrCreate(function(fileId){
-      if(!fileId){ alert('No se encontró un respaldo en tu Drive todavía.'); return; }
-      fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media', {headers:{Authorization:'Bearer '+gdriveAccessToken}})
-        .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
-        .then(function(data){
-          if(!confirm('Esto reemplazará todo tu histórico local con el respaldo de Drive ('+(data.savedAt?fmtUpdated(data.savedAt):'fecha desconocida')+'). ¿Continuar?')) return;
-          if(data.cfg) cfg = Object.assign({}, DEFAULTS, data.cfg);
-          if(data.entries) entries = data.entries;
-          if(data.calls) calls = data.calls;
-          saveCfgSilent(); saveEntries(); saveCalls();
-          renderAgentBadge(); renderAll();
-          document.getElementById('driveStatus').textContent = 'Restaurado desde Drive ✓';
-        }).catch(function(e){
-          logError('restoreFromDrive', e);
-          alert('No se pudo restaurar desde Google Drive.');
-        });
+    document.getElementById('ntCollapse').addEventListener('click', function(){
+      var body = document.getElementById('ntBody');
+      var widgetEl = document.getElementById('notesWidget');
+      var willHide = body.style.display !== 'none';
+      body.style.display = willHide ? 'none' : 'block';
+      document.getElementById('ntCollapse').textContent = willHide ? '▸' : '▾';
+      if(willHide){ widgetEl.dataset.prevHeight = widgetEl.style.height || ''; widgetEl.style.height = ''; }
+      else { widgetEl.style.height = widgetEl.dataset.prevHeight || ''; }
     });
-  }
-  var btnDriveConnectEl = document.getElementById('btnDriveConnect');
-  if(btnDriveConnectEl) btnDriveConnectEl.addEventListener('click', connectDrive);
-  var btnDriveBackupEl = document.getElementById('btnDriveBackup');
-  if(btnDriveBackupEl) btnDriveBackupEl.addEventListener('click', function(){ backupToDrive(false); });
-  var btnDriveRestoreEl = document.getElementById('btnDriveRestore');
-  if(btnDriveRestoreEl) btnDriveRestoreEl.addEventListener('click', restoreFromDrive);
-
-  var autoBackupTimer = null;
-  function scheduleAutoBackup(){
-    if(!cfg || !cfg.driveAuto || !gdriveAccessToken) return;
-    if(autoBackupTimer) clearTimeout(autoBackupTimer);
-    autoBackupTimer = setTimeout(function(){ backupToDrive(true); }, 4000); // debounce: espera 4s de inactividad
-  }
+  })();
 
   var btnViewLogEl = document.getElementById('btnViewLog');
   if(btnViewLogEl){
