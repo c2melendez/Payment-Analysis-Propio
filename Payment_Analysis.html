@@ -16,7 +16,28 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bitácora">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312140f'/%3E%3Cpath d='M16 6 L26 16 L16 26 L6 16 Z' fill='%23c9d97a'/%3E%3C/svg%3E">
+<!-- Ícono de la app: reloj + tendencia + dólar (representa ciclos de pago). Se usa como
+     favicon (embebido en base64, sin depender de archivos externos), como apple-touch-icon
+     para "Agregar a inicio" en iOS/Safari, y en manifest.json para la instalación en
+     Android/Chrome/Escritorio. Sube icon-180.png, icon-192.png e icon-512.png junto con
+     este HTML y manifest.json para que el ícono aparezca al instalar la app. -->
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAII0lEQVR42j1WzY/d51V+nuec3+/eO3fuzPWMJzMZj6cex7E9dvPR4qZYSkBUbRSkChYskACxZoGQ+AeAPX8AKxbZILFDQlAiCi2gfqh1mxY3wU6ceGLHjj0fsTO+M/fr957D4g5Ir87yPec97/PF4+Go067uPjr8i7d/9U83dgfTpCEFOGBEBVimSEt6ppMGU9IBAyvCkkp6wkDPtKir/Nbm6l997dVLS0vDyYQRzc27T37nL3/4yaPjas5hhAhnGlgBnhAg0BNOWMpSThpooIMWMKQlLdOSFlSMYrIxX//dt77x2uqavjga/8Ff//STB8O5Xg0CJIww0gFPEBAhAEkEkRIkyGAOs5SBluazq4tY3HJlrj6YHP/ZD76/ezSwjV//w7e/80lroS6ZMMGYPps3IYIBgbXYdtTGiqyklolFBnnSEgpYqm2q6B6VClH6bd+bDk5Vtb/z7mOKYEKECZa0DKWQQKJVJUp8vs9nTzgZShlCGHsvX7B2O5lhoDGzGd/8KIdDlsni9QtV28GsLX+4f993v5ikCyIIWMIDnmRCyHYduw/t4f35ts2vnm4vrxRFMlGZWp5GGItlMEBW/bmnd3bYYqtKt2KMSvG0OXaImDVQsopQIUG3ROTNdxdUll7ebq2epsHn/OC9W01Olq9dnR4NWHM25gwXjx887l1abY5HrZaVLFQai1g8CRBw0DIVFOCGDN68sXJmrf/SdhKlTCMalBoGJVEmqtUMnnWWuxJkufPdn8ydWZj/8sb4s30qlcWUZIjhQMITHqkCIyQ4892frZ3b6F3ZbsbH6aSDYonp/AvrRLFaT25+/PS9D5e/euG5V7bu/suPF9b769cvPxscVptLyMaUppDgSsGJKmEBEUi0q/jo9tLSYu/K9mR0nC4Y0iI906Da20u9g1/8z2Rv//Lvf2N68PTW33/31NnlS998dffHt+PwWbtDZ5iisqxUXOFpgCWMJFF5DJ52Bk/7v/H6dDxiJVjAEjM2MdWyxz//1XB3b+ut16zGmde3h3sHKy+sffDPNx7dvld96Gfe2Fo4188IVwaKEIICBkhQslXlg0/7mxveaVOZSijoQQOQavng3sPRZ7tbb15Llihj1Ty9fWbvg/sHO5/91p9+8+IbF5+898BVXKVicRZnSCaYYIAryqgaHbU2nm9iGs60AksQgYQhyqSz1j/71muFkWhgKUVORu2Fukyb2997X47tty5ViEphLM40plKYqQ0q5tFh3Xb1OtOchhoaICSRQipUM2I6Hh6hlfIihZQZzanNxVd/96UyOb71H+/d/vfbruIMY1ZKZ3pyppcB9xwPq07L5uosKiyRsx5BS+vY0d1PB+9/TEP/y+vLV9ZZJiRaHdv/4MHo4Mkbf/Rruzu7//a3P9p8ZWllq1+mE6ipFU4GlDSiEkvjndbh7duDj+7NXTzbvXwuYyKHDKY8fP/jrTdfref8znd+dHp71RyuZDan1uZvvnvnnb/5vlXoLbfLpHEr1gSUpuIQYICBAl3NeNrZ2OzN17bYBQoNtKTSK86tLu7evGO1tZa6VQ2WYpbM7J5q/eYfX7vxj7889/LS8eE4puPaS5SAirMIEggZqWC3asYj68+3N9e8300UKBNJC8T4+esX6m4lj83XX2Q2piCLsTCm0Uyu/faL5y4/N/xi1J03z3CmMYz4/xdksmG/2+yMYnyMEwsDFLCAQoQZz1y/KDVoxkIjC7FQKWvIxhiT8XR4NDp1us9SXAUMQxEYJ/vJosVOU9nk4HN1PJVQ0kKWmom+SjMeNuMh2EAFLFIRp0QjlKrGF3sDKBaX6oypqZiKKYQTJicECji3evTxPVSkAlZgYV5kQZUT0nmhGrE4w1U02xKaVgufvP94favrlsbiLMZiCtFO/J2VEFOdXzuejEY796xXkQ0toKBCCqpIs9WnMd3CFa4gylxXj3Y+Hxwen7/aL5Nx7VEpnMUIQQkDlGmRSjD09Uuf//KD5uiZdV0oNosRKmJTOczSmKYwFmMRSquF6XDyi//ceeX11drS1JiKODUVY1EygcCsClkaLvfyK+d23/lpGRz5fJXRIBugqWoe3t8/3NnvdORqnA3ZzHXVjCb/9Q+3Ln91eX1jLpuJKwxFDM0Mh0YYciZtTDo5Gev8c00dD//158995Uv9y6uVgdOsKgz2D1Um9cvLmaXdoUv3P9y79ZNPr1xbuXC1PxmNKg9jmIoxwGIKTyYMsIASHjDSgMm4Or/CldbjGx89u/tw+eLK4nqPc1jdOqVsUKbNaPLg3uGDD/czmutvbZ5ebU1Hk8pPbFIsfuJoxWsHVWCiEv936MBkbL1W/eY2Hh7s7+zt33lQVWh3XJY7/z3OaDo9O3d1ceN8z1imo7F7SMVOwJOuBMNA317p/eDRLo0z4IOz1wQViMJJdDYWOlsLPh7baKjxuFZ05riwaN15c0yjmZjSvfjsS1lcYQqnCpplX9PvvbDe6nhh0nCyKzZgkdIVLYM1DUej2kq3Xy1tdJfOzvVO1+bZDEdl2phCaozFcIJ9MQwQi1Evtr+mrz9/+k+ubI3LeKqQwzzNUBtaylqslW2LtqNSWhY0DZrCCGNWTheMKYaRTs7qLCCM8OTF+o2t7lVXq/rzly6S8fb9nSc5YhbPUkXjyFqzGNcYC1HIMksiQinZNAyxFBayScbMX8EIFGV1pfr29f63e/PkaDQ6Gk+Hg9HPHu9/b+/xp6NBMgxhCjFrwRVCEUo181bOWDoDTIhhDHHGPoiY18LZ1pWtxfPLfe/U/r9551GD5XqUgwAAAABJRU5ErkJggg==">
+<link rel="apple-touch-icon" href="icon-180.png">
+<!-- ===== Tema (Modo Claro / Modo Oscuro): evita parpadeo al cargar =====
+     Aplica la clase 'theme-light' sobre <html> ANTES de pintar, leyendo la preferencia
+     guardada en localStorage. El resto de la lógica de tema vive en el script principal
+     (función applyTheme), que mantiene esto sincronizado cuando el usuario cambia de modo. -->
+<script>
+(function(){
+  try{
+    var raw = localStorage.getItem('bitacora_cfg');
+    if(raw){
+      var c = JSON.parse(raw);
+      if(c && c.theme==='light') document.documentElement.classList.add('theme-light');
+    }
+  }catch(e){}
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -37,6 +58,35 @@
     --green-dim:#26301a;
     --wire:#3b4230;
     --accent:#c9d97a;
+    --accent-glow:rgba(201,217,122,.14);
+    --modal-overlay:rgba(10,11,7,.7);
+    --shadow-soft:rgba(0,0,0,.35);
+    --shadow-strong:rgba(0,0,0,.4);
+  }
+  /* ===== Modo Claro =====
+     Modo Oscuro es el tema por defecto de la app (el original). Modo Claro redefine
+     el mismo set de variables sobre <html>, así que todo lo que ya usa var(--x) se
+     adapta automáticamente sin tocar el resto de las reglas. */
+  html.theme-light{
+    --bg:#f3f4ec;
+    --panel:#ffffff;
+    --panel-2:#eceee2;
+    --line:#dde0d0;
+    --ink:#1b1d15;
+    --ink-dim:#5a6150;
+    --ink-faint:#868d73;
+    --red:#c23f2e;
+    --red-dim:#f8ddd7;
+    --amber:#9c6c1c;
+    --amber-dim:#f6ecd0;
+    --green:#4c7622;
+    --green-dim:#e1ecd4;
+    --wire:#c7cdb7;
+    --accent:#5c7a1e;
+    --accent-glow:rgba(92,122,30,.14);
+    --modal-overlay:rgba(60,64,48,.35);
+    --shadow-soft:rgba(60,64,48,.14);
+    --shadow-strong:rgba(60,64,48,.18);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -49,9 +99,15 @@
     -webkit-font-smoothing:antialiased;
     min-height:100vh;
     padding-bottom:60px;
+    transition:background-color .2s ease, color .2s ease;
+  }
+  html.theme-light body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(92,122,30,.06) 0%, transparent 60%),
+      var(--bg);
   }
   h1,h2,h3,.disp{font-family:'Space Grotesk', sans-serif;}
-  ::selection{background:var(--accent);color:#12140f;}
+  ::selection{background:var(--accent);color:#f5f6ee;}
 
   /* ===== Top bar ===== */
   header.top{
@@ -100,7 +156,7 @@
   .widgets-menu{
     display:none;position:absolute;top:calc(100% + 2px);right:0;z-index:120;
     background:var(--panel);border:1px solid var(--line);border-radius:8px;
-    min-width:190px;padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.4);
+    min-width:190px;padding:6px;box-shadow:0 10px 28px var(--shadow-strong);
   }
   .widgets-menu.open{display:block;}
   .widgets-menu-item{
@@ -210,7 +266,7 @@
   .cell.past.amber{background:var(--amber-dim);border-color:#5a4a25;}
   .cell.past.green{background:var(--green-dim);border-color:#3a4a26;}
   .cell.past .dnum{color:var(--ink);}
-  .cell.today{border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(201,217,122,.12);}
+  .cell.today{border:2px solid var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
   .cell.today .dnum{color:var(--accent);}
   .cell.future{border-style:dashed;opacity:.55;}
   .cell.future.proj-red{background:linear-gradient(180deg, transparent 0%, var(--red-dim) 100%);}
@@ -255,7 +311,7 @@
 
   /* modal */
   .modal-bg{
-    position:fixed;inset:0;background:rgba(10,11,7,.7);display:none;
+    position:fixed;inset:0;background:var(--modal-overlay);display:none;
     align-items:center;justify-content:center;z-index:50;padding:20px;
   }
   .modal-bg.open{display:flex;}
@@ -264,6 +320,17 @@
     padding:22px;width:100%;max-width:420px;
   }
   .modal h3{margin:0 0 16px;font-size:15px;}
+
+  /* ===== Ajustes: interruptor Modo Claro / Modo Oscuro ===== */
+  .theme-toggle{display:flex;gap:8px;margin-top:8px;}
+  .theme-opt{
+    flex:1;padding:10px 8px;border-radius:6px;border:1px solid var(--wire);
+    background:var(--panel-2);color:var(--ink-dim);cursor:pointer;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;
+    letter-spacing:.01em;transition:.15s;
+  }
+  .theme-opt:hover{color:var(--ink);border-color:var(--accent);}
+  .theme-opt.active{background:var(--accent);color:#161811;border-color:var(--accent);}
 
   /* ===== Ajustes: cuadro con scroll + botones up/down ===== */
   #modalBg .modal{
@@ -321,7 +388,7 @@
   .focus-widget{
     position:fixed;top:16px;right:16px;z-index:70;
     width:212px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+    box-shadow:0 6px 24px var(--shadow-soft);font-family:'JetBrains Mono',monospace;
   }
   .focus-widget.live{border-color:var(--accent);}
   .fw-head{
@@ -350,7 +417,7 @@
   .cal-widget{
     position:fixed;top:16px;right:16px;z-index:70;
     width:228px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+    box-shadow:0 6px 24px var(--shadow-soft);font-family:'JetBrains Mono',monospace;
   }
   .cal-head{
     display:flex;align-items:center;gap:7px;padding:10px 12px;
@@ -420,7 +487,7 @@
   /* ===== Minimizado = icono circular pequeño (en vez de barra con texto) ===== */
   .widget-float.w-collapsed{
     width:44px!important;height:44px!important;border-radius:50%;overflow:hidden;
-    box-shadow:0 4px 14px rgba(0,0,0,.4);
+    box-shadow:0 4px 14px var(--shadow-strong);
   }
   .widget-float.w-collapsed .w-head{
     width:44px;height:44px;padding:0;border:none;border-radius:50%;
@@ -445,7 +512,7 @@
   .tr-widget{
     position:fixed;top:16px;right:16px;z-index:70;width:266px;
     background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+    box-shadow:0 6px 24px var(--shadow-soft);font-family:'JetBrains Mono',monospace;
   }
   .tr-head{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);}
   .tr-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
@@ -478,7 +545,7 @@
   .nt-widget{
     position:fixed;top:16px;right:16px;z-index:70;width:220px;
     background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    box-shadow:0 6px 24px rgba(0,0,0,.35);font-family:'JetBrains Mono',monospace;
+    box-shadow:0 6px 24px var(--shadow-soft);font-family:'JetBrains Mono',monospace;
   }
   .nt-head{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);}
   .nt-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
@@ -505,7 +572,7 @@
     background:var(--panel);border:1px solid var(--wire);border-radius:999px;
     padding:6px 14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;
     letter-spacing:.03em;color:var(--accent);
-    box-shadow:0 6px 18px rgba(0,0,0,.3);z-index:80;
+    box-shadow:0 6px 18px var(--shadow-soft);z-index:80;
   }
   .agent-badge.show{display:inline-flex;}
   .agent-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
@@ -518,7 +585,7 @@
   .field-highlight{
     border:1px solid var(--accent);border-radius:8px;
     padding:13px;background:var(--panel-2);
-    box-shadow:0 0 0 3px rgba(201,217,122,.14);
+    box-shadow:0 0 0 3px var(--accent-glow);
     position:relative;
   }
   .field-highlight label{color:var(--accent);font-weight:700;}
@@ -527,7 +594,7 @@
     animation:importGlow 2.2s ease-in-out infinite;
   }
   @keyframes importGlow{
-    0%,100%{box-shadow:0 0 0 0 rgba(201,217,122,.35);}
+    0%,100%{box-shadow:0 0 0 0 var(--accent-glow);}
     50%{box-shadow:0 0 0 5px rgba(201,217,122,0);}
   }
   .field-highlight .badge-star{
@@ -867,6 +934,14 @@
   <div class="modal">
     <h3>Ajustes</h3>
     <div class="modal-scroll" id="modalScroll">
+      <div class="field" style="border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:16px;">
+        <label>Apariencia</label>
+        <div class="theme-toggle" id="themeToggle">
+          <button type="button" class="theme-opt" id="themeOptDark" data-theme="dark">🌙 Modo Oscuro</button>
+          <button type="button" class="theme-opt" id="themeOptLight" data-theme="light">☀️ Modo Claro</button>
+        </div>
+        <div class="rate-status">Modo Oscuro es el modo original y viene activado por defecto. El cambio se aplica al instante.</div>
+      </div>
       <div class="field">
         <label>Tasa de cambio USD → HNL</label>
         <input type="number" id="cfgRate" step="0.0001">
@@ -1012,6 +1087,7 @@
   /* ---------- Constantes por defecto (igual que el Excel) ---------- */
   var DEFAULTS = {
     title: 'Bitácora de Ciclo',
+    theme: 'dark',         // 'dark' (por defecto, modo original) | 'light'
     dailyGoal: 660,        // minutos
     ratePerMin: 0.12,      // USD por minuto
     cycleGoal: 1000,       // USD meta de ciclo
@@ -1096,6 +1172,21 @@
   function saveCfg(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); }
   function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); }
   function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); }
+
+  /* ---------- Modo Claro / Modo Oscuro ----------
+     El <head> ya aplicó la clase 'theme-light' antes de pintar (ver script inline
+     al inicio del documento) para evitar parpadeo. Aquí solo mantenemos todo en
+     sincronía cuando el usuario cambia de tema desde Ajustes. */
+  function applyTheme(theme){
+    var isLight = theme==='light';
+    document.documentElement.classList.toggle('theme-light', isLight);
+    var mc = document.querySelector('meta[name="theme-color"]');
+    if(mc) mc.content = isLight ? '#f3f4ec' : '#12140f';
+    document.querySelectorAll('.theme-opt').forEach(function(b){
+      b.classList.toggle('active', b.dataset.theme===theme);
+    });
+  }
+  applyTheme(cfg.theme || 'dark');
 
   /* ---------- Log de errores (item C) ----------
      Guarda un histórico corto de errores para depuración, sin interrumpir al usuario. */
@@ -1638,11 +1729,18 @@
   })();
 
   /* ---------- Modos de visualización del rendimiento (req. 7) ---------- */
-  var VIZ_COLORS = {red:'#e0523f', amber:'#d9a441', green:'#7fb241', ink:'#eef0e6', faint:'#5c6350'};
+  var VIZ_PALETTES = {
+    dark:  {red:'#e0523f', amber:'#d9a441', green:'#7fb241', ink:'#eef0e6', faint:'#5c6350'},
+    light: {red:'#c23f2e', amber:'#9c6c1c', green:'#4c7622', ink:'#1b1d15', faint:'#6b7057'}
+  };
+  function getVizColors(){
+    return document.documentElement.classList.contains('theme-light') ? VIZ_PALETTES.light : VIZ_PALETTES.dark;
+  }
 
   function renderPerfViz(boxId, target, min, goal, status, linePoints){
     var box = document.getElementById(boxId);
     if(!box) return;
+    var VIZ_COLORS = getVizColors();
     var pct = goal>0 ? (min/goal)*100 : 0;
     var color = VIZ_COLORS[status];
     var mode = (target==='ciclo' ? cfg.vizModeCiclo : cfg.vizMode) || 'bar';
@@ -2390,7 +2488,16 @@
 
   /* ---------- Ajustes / Modal ---------- */
   var modal = document.getElementById('modalBg');
+  document.querySelectorAll('.theme-opt').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      cfg.theme = btn.dataset.theme;
+      saveCfg();
+      applyTheme(cfg.theme);
+      renderAll();
+    });
+  });
   document.getElementById('btnSettings').addEventListener('click', function(){
+    applyTheme(cfg.theme || 'dark');
     document.getElementById('cfgRate').value = cfg.exchangeRate;
     document.getElementById('cfgDailyGoal').value = cfg.dailyGoal;
     document.getElementById('cfgRatePerMin').value = cfg.ratePerMin;
@@ -2531,6 +2638,7 @@
         if(data.entries) entries = data.entries;
         if(data.calls) calls = data.calls;
         saveCfg(); saveEntries(); saveCalls();
+        applyTheme(cfg.theme || 'dark');
         renderAgentBadge();
         renderAll();
         document.getElementById('rateStatus').textContent = 'Datos importados correctamente.';

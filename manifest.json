@@ -1,23 +1,26 @@
 {
   "name": "Bitácora de Ciclo — Rendimiento Diario",
   "short_name": "Bitácora",
-  "description": "Bitácora de rendimiento diario y de ciclo de pago (minutos, USD/HNL, metas, forecast).",
+  "description": "Seguimiento de llamadas, ganancias y ciclos de pago para intérpretes remotos.",
   "start_url": "./Payment_Analysis.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#12140f",
   "theme_color": "#12140f",
-  "orientation": "any",
+  "lang": "es",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%2312140f'/%3E%3Cpath d='M96 32 L160 96 L96 160 L32 96 Z' fill='%23c9d97a'/%3E%3C/svg%3E",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='84' fill='%2312140f'/%3E%3Cpath d='M256 86 L426 256 L256 426 L86 256 Z' fill='%23c9d97a'/%3E%3C/svg%3E",
+      "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
