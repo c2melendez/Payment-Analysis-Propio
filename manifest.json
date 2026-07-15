@@ -1,14 +1,13 @@
 {
-  "name": "Bitácora de Ciclo — Rendimiento Diario",
-  "short_name": "Bitácora",
-  "description": "Seguimiento de llamadas, ganancias y ciclos de pago para intérpretes remotos.",
+  "name": "Payment Analysis Propio",
+  "short_name": "Payment Analysis",
+  "description": "Rendimiento diario de ciclo de pago — 14 días",
   "start_url": "./Payment_Analysis.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
   "background_color": "#12140f",
   "theme_color": "#12140f",
-  "lang": "es",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "icon-192.png",
@@ -21,6 +20,11 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
   ]
 }

@@ -1,0 +1,48 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="30%" cy="15%" r="90%">
+      <stop offset="0%" stop-color="#1b2013"/>
+      <stop offset="60%" stop-color="#12140f"/>
+      <stop offset="100%" stop-color="#12140f"/>
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c9d97a"/>
+      <stop offset="100%" stop-color="#7fb241"/>
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)"/>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#2b2f22" stroke-width="2"/>
+
+  <!-- Anillo de ciclo (reloj/ciclo de pago) -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#2b2f22" stroke-width="20"/>
+  <path d="M 256 106 A 150 150 0 1 1 130 331"
+        fill="none" stroke="url(#ringGrad)" stroke-width="20" stroke-linecap="round"
+        filter="url(#softGlow)"/>
+  <!-- flecha del ciclo -->
+  <path d="M 118 316 L 130 331 L 148 322" fill="none" stroke="url(#ringGrad)"
+        stroke-width="20" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+
+  <!-- Manecillas de reloj -->
+  <line x1="256" y1="256" x2="256" y2="176" stroke="#eef0e6" stroke-width="14" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="312" y2="256" stroke="#eef0e6" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="12" fill="#c9d97a"/>
+
+  <!-- Tendencia (linea ascendente) en la base -->
+  <polyline points="176,362 216,330 248,348 296,296 336,310"
+            fill="none" stroke="#d9a441" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="336,310 356,298 344,320" fill="#d9a441"/>
+
+  <!-- Insignia de moneda (Lempira) -->
+  <circle cx="366" cy="146" r="40" fill="#191c15" stroke="#d9a441" stroke-width="6"/>
+  <text x="366" y="163" font-family="Arial, sans-serif" font-weight="700"
+        font-size="42" fill="#d9a441" text-anchor="middle">L</text>
+</svg>
