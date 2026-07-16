@@ -1032,6 +1032,24 @@
       </div>
 
       <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
+        <label><input type="checkbox" id="cfgSyncEnabled" style="width:auto;margin-right:6px;">Sincronizar con backend</label>
+        <div class="rate-status">Mismo servidor que usa la extensión de Chrome para captura rápida. La app sigue funcionando sin esto (todo queda en localStorage); al activarlo, además trae y manda tus entradas a ese servidor.</div>
+      </div>
+      <div class="field">
+        <label>URL del servidor</label>
+        <input type="text" id="cfgSyncUrl" placeholder="http://localhost:5057 o tu IP de Tailscale">
+      </div>
+      <div class="field">
+        <label>Token</label>
+        <input type="password" id="cfgSyncToken" placeholder="El mismo BITACORA_TOKEN del backend">
+      </div>
+      <div class="rate-status" id="syncStatus">—</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button class="btn ghost sm" id="btnSyncTest">Probar conexión</button>
+        <button class="btn ghost sm" id="btnSyncNow">↻ Sincronizar ahora</button>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
         <label>Restablecer aplicación</label>
         <button class="btn ghost sm" id="btnReset" style="border-color:#5a3229;color:var(--red);">↺ Restablecer a valores por defecto</button>
         <div class="rate-status">Borra todo el histórico y restaura: meta diaria 480 min, meta de ciclo $570, tarifa $0.12/min, título "Payment Analysis Propio", barra lineal, y la posición/tamaño de los widgets. No se puede deshacer.</div>
@@ -1044,6 +1062,10 @@
         <label class="btn ghost sm" style="cursor:pointer;">Importar JSON<input type="file" id="fileImport" accept="application/json" style="display:none;"></label>
         <button class="btn sm" id="btnSaveCfg">Guardar</button>
       </div>
+      <div class="modal-actions" style="justify-content:flex-start;">
+        <label class="btn ghost sm" style="cursor:pointer;">Importar JSON de extensión (fusionar)<input type="file" id="fileImportExt" accept="application/json" style="display:none;"></label>
+      </div>
+      <div class="rate-status" id="extImportStatus" style="display:none;"></div>
     </div>
     <div class="modal-scroll-btns">
       <button type="button" class="modal-scroll-btn" id="modalScrollUp" title="Subir">▲</button>
@@ -1122,7 +1144,15 @@
     // ---- Notas rápidas ----
     quickNotes: '',
     // ---- Traductor: preferencia de auto-traducir mientras se escribe ----
-    trAutoTranslate: false
+    trAutoTranslate: false,
+    // ---- Sincronización con backend (compartido con la extensión de Chrome) ----
+    sync: {
+      enabled: false,
+      serverUrl: '',
+      token: '',
+      lastSyncAt: null,
+      lastSyncOk: null
+    }
   };
   var ANCHOR = new Date('2026-05-30T00:00:00'); // sábado de referencia (inicio de ciclo confirmado)
   var DAY_MS = 86400000;
@@ -1138,6 +1168,9 @@
     Object.keys(DEFAULTS.widgets).forEach(function(k){
       cfg.widgets[k] = Object.assign({}, DEFAULTS.widgets[k], cfg.widgets[k]||{});
     });
+  })();
+  (function ensureSyncDefaults(){
+    cfg.sync = Object.assign({}, DEFAULTS.sync, cfg.sync||{});
   })();
   var entries = loadJSON('bitacora_entries', {}); // { 'YYYY-MM-DD': [{id,min,nota,usd?}, ...] }
   /* Detalle por llamada (solo se llena al importar hoja de cálculo). Se usa para los
@@ -1171,8 +1204,199 @@
     }catch(e){ return JSON.parse(JSON.stringify(fallback)); }
   }
   function saveCfg(){ localStorage.setItem('bitacora_cfg', JSON.stringify(cfg)); }
-  function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); }
-  function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); }
+  function saveEntries(){ localStorage.setItem('bitacora_entries', JSON.stringify(entries)); scheduleSyncPush(); }
+  function saveCalls(){ localStorage.setItem('bitacora_calls', JSON.stringify(calls)); scheduleSyncPush(); }
+
+  /* ---------- Sincronización con backend ----------
+     Misma fuente de verdad que usa la extensión de Chrome. La app sigue
+     funcionando 100% offline con localStorage como siempre; si hay un
+     servidor configurado y responde, además:
+       - Al cargar: trae entries/calls del servidor y los mezcla con lo local
+         (por id — no se pierde nada de ningún lado, solo se completa).
+       - Al guardar: manda en segundo plano (con debounce) las entries/calls
+         actuales al servidor. Si falla (offline, servidor apagado), se
+         encola en localStorage y se reintenta la próxima vez que haya red.
+     Límite conocido: los borrados hechos en la app (ej. borrar un ciclo en
+     Reportes) no se propagan como borrado al servidor — solo se sincronizan
+     altas/ediciones. Si necesitas borrar algo también del lado del backend,
+     hazlo directamente ahí (DELETE /entries/<id> o /calls/<id>).
+  */
+  var SYNC_QUEUE_KEY = 'bitacora_sync_queue';
+  var SYNC_DEBOUNCE_MS = 1800;
+  var syncPushTimer = null;
+
+  function syncConfigured(){
+    return !!(cfg.sync && cfg.sync.enabled && cfg.sync.serverUrl && cfg.sync.token);
+  }
+
+  function syncBaseUrl(){
+    return (cfg.sync.serverUrl||'').replace(/\/+$/,'');
+  }
+
+  function syncFetch(path, opts){
+    opts = opts || {};
+    var headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{}, {
+      'Authorization': 'Bearer '+cfg.sync.token
+    });
+    return fetch(syncBaseUrl()+path, Object.assign({}, opts, {headers: headers}));
+  }
+
+  function checkSyncHealth(){
+    if(!syncConfigured()) return Promise.resolve(false);
+    return fetch(syncBaseUrl()+'/health').then(function(r){ return r.ok; }).catch(function(){ return false; });
+  }
+
+  function flattenEntriesForSync(){
+    var out = [];
+    Object.keys(entries).forEach(function(dISO){
+      (entries[dISO]||[]).forEach(function(e){
+        out.push({id:e.id, date:dISO, min:Number(e.min||0), usd:Number(e.usd||0), nota:e.nota||''});
+      });
+    });
+    return out;
+  }
+
+  function flattenCallsForSync(){
+    var out = [];
+    Object.keys(calls).forEach(function(dISO){
+      (calls[dISO]||[]).forEach(function(c){
+        out.push({
+          id: c.id, date: dISO, min: Number(c.min||0), usd: Number(c.usd||0),
+          segment: c.segment||'', serviceLine: c.line||'',
+          adj: c.adj, hour: c.hour
+        });
+      });
+    });
+    return out;
+  }
+
+  function queueSyncRetry(){
+    try{ localStorage.setItem(SYNC_QUEUE_KEY, '1'); }catch(e){}
+  }
+  function clearSyncRetry(){
+    try{ localStorage.removeItem(SYNC_QUEUE_KEY); }catch(e){}
+  }
+  function hasSyncPending(){
+    try{ return localStorage.getItem(SYNC_QUEUE_KEY)==='1'; }catch(e){ return false; }
+  }
+
+  function scheduleSyncPush(){
+    if(!syncConfigured()) return;
+    clearTimeout(syncPushTimer);
+    syncPushTimer = setTimeout(pushAllToServer, SYNC_DEBOUNCE_MS);
+  }
+
+  function pushAllToServer(){
+    if(!syncConfigured()) return Promise.resolve();
+    var entriesBatch = flattenEntriesForSync();
+    var callsBatch = flattenCallsForSync();
+    var jobs = [];
+    if(entriesBatch.length){
+      jobs.push(syncFetch('/entries', {method:'POST', body: JSON.stringify(entriesBatch)}));
+    }
+    if(callsBatch.length){
+      jobs.push(syncFetch('/calls', {method:'POST', body: JSON.stringify(callsBatch)}));
+    }
+    if(jobs.length===0) return Promise.resolve();
+    return Promise.all(jobs).then(function(resList){
+      var ok = resList.every(function(r){ return r.ok; });
+      if(!ok) throw new Error('push parcial falló');
+      clearSyncRetry();
+      cfg.sync.lastSyncAt = Date.now();
+      cfg.sync.lastSyncOk = true;
+      saveCfg();
+      renderSyncStatus();
+    }).catch(function(e){
+      queueSyncRetry();
+      cfg.sync.lastSyncOk = false;
+      saveCfg();
+      renderSyncStatus();
+      logError('sync:push', e);
+    });
+  }
+
+  function mergeById(localMap, remoteList, fields){
+    // Combina remoteList (array plano del servidor) con localMap (objeto por fecha).
+    // El servidor completa lo que falta localmente; lo local nunca se borra por esto.
+    var seen = {};
+    Object.keys(localMap).forEach(function(dISO){
+      (localMap[dISO]||[]).forEach(function(item){ if(item && item.id) seen[item.id] = true; });
+    });
+    remoteList.forEach(function(r){
+      if(!r || !r.id || seen[r.id]) return;
+      var dISO = r.date;
+      if(!dISO) return;
+      if(!localMap[dISO]) localMap[dISO] = [];
+      localMap[dISO].push(fields(r));
+      seen[r.id] = true;
+    });
+    return localMap;
+  }
+
+  function pullFromServer(){
+    if(!syncConfigured()) return Promise.resolve(false);
+    return Promise.all([
+      syncFetch('/entries').then(function(r){ return r.ok ? r.json() : {entries:[]}; }),
+      syncFetch('/calls').then(function(r){ return r.ok ? r.json() : {calls:[]}; })
+    ]).then(function(results){
+      var remoteEntries = results[0].entries || [];
+      var remoteCalls = results[1].calls || [];
+      mergeById(entries, remoteEntries, function(r){
+        return {id:r.id, min:r.min, usd:r.usd, nota:r.nota||''};
+      });
+      mergeById(calls, remoteCalls, function(r){
+        return {id:r.id, min:r.min, usd:r.usd, segment:r.segment||'', line:r.serviceLine||''};
+      });
+      localStorage.setItem('bitacora_entries', JSON.stringify(entries));
+      localStorage.setItem('bitacora_calls', JSON.stringify(calls));
+      cfg.sync.lastSyncAt = Date.now();
+      cfg.sync.lastSyncOk = true;
+      saveCfg();
+      return true;
+    }).catch(function(e){
+      cfg.sync.lastSyncOk = false;
+      saveCfg();
+      logError('sync:pull', e);
+      return false;
+    });
+  }
+
+  function renderSyncStatus(){
+    var el = document.getElementById('syncStatus');
+    if(!el) return;
+    if(!cfg.sync || !cfg.sync.enabled){
+      el.textContent = 'Desactivada — la app funciona solo con localStorage.';
+      return;
+    }
+    if(!cfg.sync.serverUrl || !cfg.sync.token){
+      el.textContent = 'Falta la URL del servidor o el token.';
+      return;
+    }
+    if(cfg.sync.lastSyncOk===true){
+      el.textContent = '✓ Sincronizado — última vez '+fmtUpdated(new Date(cfg.sync.lastSyncAt).toISOString());
+    }else if(cfg.sync.lastSyncOk===false){
+      el.textContent = '⚠ Sin conexión al servidor — usando el último caché local. Se reintenta solo.';
+    }else{
+      el.textContent = 'Aún no se ha sincronizado.';
+    }
+  }
+
+  function syncNow(showAlert){
+    if(!syncConfigured()){
+      if(showAlert) alert('Activa la sincronización y completa URL + token primero.');
+      return;
+    }
+    var el = document.getElementById('syncStatus');
+    if(el) el.textContent = 'Sincronizando…';
+    pullFromServer().then(function(ok){
+      renderSyncStatus();
+      renderAll();
+      if(showAlert) alert(ok ? 'Sincronización completa.' : 'No se pudo conectar al servidor. Se sigue usando el caché local.');
+    });
+  }
+
+  // Si se quedó un push pendiente de una sesión anterior sin conexión, reintenta al cargar.
+  window.addEventListener('online', function(){ if(hasSyncPending()) pushAllToServer(); });
 
   /* ---------- Modo Claro / Modo Oscuro ----------
      El <head> ya aplicó la clase 'theme-light' antes de pintar (ver script inline
@@ -2519,6 +2743,10 @@
     document.getElementById('cfgWCalendar').checked = !!cfg.widgets.calendar.enabled;
     document.getElementById('cfgWTranslator').checked = !!cfg.widgets.translator.enabled;
     document.getElementById('cfgWNotes').checked = !!cfg.widgets.notes.enabled;
+    document.getElementById('cfgSyncEnabled').checked = !!cfg.sync.enabled;
+    document.getElementById('cfgSyncUrl').value = cfg.sync.serverUrl || '';
+    document.getElementById('cfgSyncToken').value = cfg.sync.token || '';
+    renderSyncStatus();
     renderNotifPermStatus();
     modal.classList.add('open');
     modalScroll.scrollTop = 0;
@@ -2586,6 +2814,9 @@
     cfg.widgets.calendar.enabled = document.getElementById('cfgWCalendar').checked;
     cfg.widgets.translator.enabled = document.getElementById('cfgWTranslator').checked;
     cfg.widgets.notes.enabled = document.getElementById('cfgWNotes').checked;
+    cfg.sync.enabled = document.getElementById('cfgSyncEnabled').checked;
+    cfg.sync.serverUrl = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
+    cfg.sync.token = document.getElementById('cfgSyncToken').value.trim();
     saveCfg();
     Object.keys(WIDGET_ELS).forEach(function(k){
       WIDGET_ELS[k].style.display = cfg.widgets[k].enabled ? '' : 'none';
@@ -2598,6 +2829,27 @@
     if(typeof layoutWidgetDock === 'function') requestAnimationFrame(layoutWidgetDock);
     modal.classList.remove('open');
     renderAll();
+    if(syncConfigured()) syncNow(false);
+  });
+
+  document.getElementById('btnSyncTest').addEventListener('click', function(){
+    var url = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
+    if(!url){ document.getElementById('syncStatus').textContent = 'Escribe primero una URL de servidor.'; return; }
+    document.getElementById('syncStatus').textContent = 'Probando…';
+    fetch(url+'/health').then(function(r){
+      document.getElementById('syncStatus').textContent = r.ok ? '✓ Conectado — el servidor respondió.' : 'El servidor respondió con error.';
+    }).catch(function(){
+      document.getElementById('syncStatus').textContent = 'No se pudo conectar. Revisa la URL y que el backend esté corriendo.';
+    });
+  });
+
+  document.getElementById('btnSyncNow').addEventListener('click', function(){
+    // toma lo que esté escrito en el modal aunque todavía no se haya dado "Guardar"
+    cfg.sync.enabled = true;
+    cfg.sync.serverUrl = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
+    cfg.sync.token = document.getElementById('cfgSyncToken').value.trim();
+    saveCfg();
+    syncNow(true);
   });
 
   document.getElementById('btnFetchRate').addEventListener('click', function(){
@@ -2646,6 +2898,39 @@
       }catch(err){
         alert('El archivo no es un respaldo válido.');
       }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('fileImportExt').addEventListener('change', function(e){
+    var file = e.target.files[0]; if(!file) return;
+    var statusEl = document.getElementById('extImportStatus');
+    statusEl.style.display = 'block';
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var data = JSON.parse(ev.target.result);
+        var items = data.calls || [];
+        if(!Array.isArray(items) || items.length===0){
+          statusEl.textContent = 'El archivo no tiene entradas para importar.';
+          return;
+        }
+        var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
+        mergeById(calls, items, function(r){
+          return {id:r.id, min:r.min, usd:r.usd, segment:r.segment||'', line:r.serviceLine||'', nota:r.nota||''};
+        });
+        var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
+        saveCalls();
+        renderAll();
+        var agregadas = after - before;
+        statusEl.textContent = agregadas > 0
+          ? '✓ Se agregaron ' + agregadas + ' entradas nuevas de la extensión (las repetidas se ignoraron).'
+          : 'No había entradas nuevas — ya estaban todas importadas.';
+      }catch(err){
+        statusEl.textContent = 'El archivo no es un export válido de la extensión.';
+        logError('import:extension-json', err);
+      }
+      e.target.value = ''; // permite volver a elegir el mismo archivo si hace falta
     };
     reader.readAsText(file);
   });
@@ -3281,6 +3566,9 @@
 
   renderAll();
   updateExchangeRateAuto();
+  if(syncConfigured()){
+    pullFromServer().then(function(){ renderAll(); renderSyncStatus(); });
+  }
 
   /* ---------- Item K: registro del Service Worker (PWA) ----------
      Habilita instalación y funcionamiento offline del "shell" de la app. Ojo: esto NO
