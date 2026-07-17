@@ -1083,7 +1083,14 @@
       <input type="text" id="dayInNota" placeholder="nota (opcional)">
       <button class="btn sm" id="dayBtnAdd">+ Agregar</button>
     </div>
+    <div class="entry-form" style="margin-top:-6px;">
+      <input type="date" id="dayInCallDate" title="Call date (opcional — si lo dejas vacío, usa el día que estás editando)">
+      <input type="time" id="dayInCallStart" title="Call start (opcional)">
+      <span class="rate-status" style="align-self:center;">Call date/start opcionales — para que la entrada también aparezca en el detalle de llamadas de abajo.</span>
+    </div>
     <div class="entries" id="dayEntries"></div>
+    <h4 style="margin:14px 0 6px;font-size:13px;color:var(--ink-dim);">Detalle de llamadas (Call Date / Call Start / Duration)</h4>
+    <div class="entries" id="dayCalls"></div>
     <div class="modal-actions">
       <button class="btn ghost sm" id="dayModalClose">Cerrar</button>
     </div>
@@ -2156,7 +2163,36 @@
     var d = new Date(dISO+'T00:00:00');
     document.getElementById('dayModalTitle').textContent = 'Día '+dayNum+' — '+capitalize(fmtDateEs(d));
     renderDayEntries();
+    renderDayCalls();
     dayModal.classList.add('open');
+  }
+  function fmtCallStart(hhmm){
+    // 'hhmm' viene de un <input type="time"> (formato 24h "HH:MM") -> "hh:mm AM/PM"
+    var m = /^(\d{1,2}):(\d{2})/.exec(hhmm||'');
+    if(!m) return '';
+    var h = parseInt(m[1],10), min = m[2];
+    var period = h>=12 ? 'PM' : 'AM';
+    var h12 = h%12===0 ? 12 : h%12;
+    return pad2(h12)+':'+min+' '+period;
+  }
+  function renderDayCalls(){
+    var list = (calls[editingISO]||[]).slice();
+    var box = document.getElementById('dayCalls');
+    box.innerHTML='';
+    if(list.length===0){
+      box.innerHTML = '<div class="empty">Sin llamadas capturadas este día (automáticas o manuales).</div>';
+      return;
+    }
+    // Más reciente primero cuando hay hora; si no, se quedan en el orden en que se guardaron.
+    list.sort(function(a,b){ return (b.hour==null?-1:b.hour) - (a.hour==null?-1:a.hour); });
+    list.forEach(function(c){
+      var row = document.createElement('div');
+      row.className='entry-row';
+      var startTxt = c.start || (c.hour!=null ? pad2(c.hour%12===0?12:c.hour%12)+':00 '+(c.hour>=12?'PM':'AM') : '—');
+      row.innerHTML = '<span class="l">'+editingISO+' &middot; '+startTxt+'</span>'+
+        '<span><span class="amt">'+c.min+' min</span></span>';
+      box.appendChild(row);
+    });
   }
   function renderDayEntries(){
     var list = entries[editingISO]||[];
@@ -2193,9 +2229,29 @@
     if(!entries[editingISO]) entries[editingISO]=[];
     entries[editingISO].push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), min:min, nota:nota});
     saveEntries();
+
+    // Call date/start opcionales: si se llenó al menos uno, también se agrega
+    // a la tabla de detalle de llamadas (Call Date / Call Start / Duration).
+    var callDateVal = document.getElementById('dayInCallDate').value;
+    var callStartVal = document.getElementById('dayInCallStart').value;
+    if(callDateVal || callStartVal){
+      var callDISO = callDateVal || editingISO;
+      var startLabel = callStartVal ? fmtCallStart(callStartVal) : '';
+      var hour = callStartVal ? parseInt(callStartVal.split(':')[0],10) : null;
+      var segment = hour!=null ? segmentOfHour(hour) : null;
+      if(!calls[callDISO]) calls[callDISO]=[];
+      calls[callDISO].push({
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        min: min, start: startLabel, hour: hour, segment: segment, source: 'manual'
+      });
+      saveCalls();
+    }
+
     document.getElementById('dayInMin').value='';
     document.getElementById('dayInNota').value='';
-    renderDayEntries(); renderAll();
+    document.getElementById('dayInCallDate').value='';
+    document.getElementById('dayInCallStart').value='';
+    renderDayEntries(); renderDayCalls(); renderAll();
   });
   document.getElementById('dayInMin').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('dayBtnAdd').click(); });
   document.getElementById('dayInNota').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('dayBtnAdd').click(); });
@@ -2910,22 +2966,36 @@
     reader.onload = function(ev){
       try{
         var data = JSON.parse(ev.target.result);
-        var items = data.calls || [];
-        if(!Array.isArray(items) || items.length===0){
-          statusEl.textContent = 'El archivo no tiene entradas para importar.';
-          return;
+        var parts = [];
+
+        // "calls": llamadas del ciclo en curso capturadas por la extensión
+        // (Call Date / Call Start / Duration) — se fusionan por id, sin pisar nada.
+        var callItems = data.calls || [];
+        if(Array.isArray(callItems) && callItems.length>0){
+          var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
+          mergeById(calls, callItems, function(r){
+            var hour = r.callStart ? parseHour12(r.callStart) : null;
+            var segment = hour!=null ? segmentOfHour(hour) : null;
+            return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||'portal-auto'};
+          });
+          var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
+          saveCalls();
+          parts.push((after-before)+' llamada(s) nueva(s) de hoy');
         }
-        var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
-        mergeById(calls, items, function(r){
-          return {id:r.id, min:r.min, usd:r.usd, segment:r.segment||'', line:r.serviceLine||'', nota:r.nota||''};
-        });
-        var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
-        saveCalls();
+
+        // "history": histórico de Propio Analytics — mismo formato que la hoja de
+        // cálculo que ya se importa, así que reutiliza el mismo importador tal cual.
+        var historyItems = data.history || [];
+        if(Array.isArray(historyItems) && historyItems.length>0){
+          var histResult = importRowsToEntries(historyItems);
+          saveEntries(); saveCalls();
+          parts.push(histResult.days+' día(s) de histórico ('+histResult.rows+' fila(s))');
+        }
+
         renderAll();
-        var agregadas = after - before;
-        statusEl.textContent = agregadas > 0
-          ? '✓ Se agregaron ' + agregadas + ' entradas nuevas de la extensión (las repetidas se ignoraron).'
-          : 'No había entradas nuevas — ya estaban todas importadas.';
+        statusEl.textContent = parts.length>0
+          ? '✓ Importado: '+parts.join(' · ')+'.'
+          : 'El archivo no tiene entradas para importar.';
       }catch(err){
         statusEl.textContent = 'El archivo no es un export válido de la extensión.';
         logError('import:extension-json', err);
@@ -3012,13 +3082,14 @@
       var adjRaw = adjKey ? parseMoneyLoose(row[adjKey]) : NaN;
       var adj = isNaN(adjRaw) ? 0 : adjRaw;
       var line = lineKey ? String(row[lineKey]||'').trim() : '';
+      var startRaw = startKey ? String(row[startKey]||'').trim() : '';
       var hour = startKey ? parseHour12(row[startKey]) : null;
       var segment = (hour!==null && hour!==undefined) ? segmentOfHour(hour) : null;
       if(!byDay[dISO]) byDay[dISO] = {min:0, usd:0, count:0, calls:[]};
       byDay[dISO].min += min;
       byDay[dISO].usd += usd;
       byDay[dISO].count += 1;
-      byDay[dISO].calls.push({min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment});
+      byDay[dISO].calls.push({min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:'import'});
       rowsUsed++;
       if(agentKey){
         var aid = String(row[agentKey]||'').trim();
