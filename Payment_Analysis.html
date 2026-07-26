@@ -513,9 +513,10 @@
      Botón "pop-out": si el navegador soporta Document Picture-in-Picture (Chrome/Edge de
      escritorio) el widget se abre en una ventana flotante REAL que el sistema operativo
      mantiene siempre encima de cualquier otra aplicación, no solo encima de esta pestaña.
-     Si no lo soporta (Firefox, Safari, la mayoría de móviles), cae a una ventana emergente
-     normal del navegador: se puede mover a otra parte de la pantalla, pero "siempre encima
-     de otras apps" ya no queda garantizado — eso lo decide el navegador/SO, no esta app. */
+     El navegador solo permite UNA de esas ventanas a la vez por pestaña: si ya hay una en
+     uso, los siguientes widgets que "salgan" usan una ventana emergente normal (también
+     independiente, pero sin la garantía de quedar siempre encima de otras apps — eso lo
+     decide el navegador/SO, ninguna página puede forzarlo fuera de Document PiP). */
   .w-popout-btn.active{color:var(--accent);}
   .widget-float.w-popped-out{
     position:static!important;width:100%!important;height:100vh!important;
@@ -524,8 +525,44 @@
   .widget-float.w-popped-out:active{cursor:default;}
   .widget-float.w-popped-out .w-resize-handle{display:none;}
   .widget-float.w-popped-out .w-size-btn:not(.w-popout-btn){display:none;}
-  .widget-float.w-popped-out .fw-collapse,
-  .widget-float.w-popped-out .cal-collapse{display:none;}
+
+  /* Ícono identificador: por defecto invisible (solo se usa para reconocer la ventana
+     una vez que el widget "escapó"); en la app principal el encabezado ya se distingue
+     por estar dentro de su propio widget, así que no hace falta ahí. */
+  .w-id-icon{display:none;width:15px;height:15px;flex-shrink:0;color:var(--ink-dim);}
+  .w-id-icon svg{width:100%;height:100%;display:block;}
+  .widget-float.w-popped-out .w-id-icon{display:flex;align-items:center;justify-content:center;}
+
+  /* Minimizado DENTRO de su propia ventana emergente: a diferencia del "dock" circular de
+     la app principal, aquí no tiene sentido encoger a un círculo flotante — el widget ya
+     está solo en su ventana. En su lugar, se reduce a una franja con solo el encabezado
+     (ícono + nombre), ocultando el cuerpo; si la ventana la abrió window.open, además se
+     intenta encoger la ventana real al mismo alto de esa franja (algunos navegadores lo
+     permiten, otros lo ignoran — eso no depende de esta app). */
+  .widget-float.w-popped-out.w-collapsed{
+    width:100%!important;height:auto!important;border-radius:0;box-shadow:none;overflow:visible;
+  }
+  .widget-float.w-popped-out.w-collapsed .w-head{
+    width:100%;height:auto;padding:10px 12px;border-radius:0;
+  }
+  .widget-float.w-popped-out.w-collapsed .fw-dot,
+  .widget-float.w-popped-out.w-collapsed .fw-label,
+  .widget-float.w-popped-out.w-collapsed .cal-mark,
+  .widget-float.w-popped-out.w-collapsed .cal-label,
+  .widget-float.w-popped-out.w-collapsed .tr-mark,
+  .widget-float.w-popped-out.w-collapsed .tr-label,
+  .widget-float.w-popped-out.w-collapsed .nt-mark,
+  .widget-float.w-popped-out.w-collapsed .nt-label{display:inline-block!important;}
+  .widget-float.w-popped-out.w-collapsed .w-head-btns{width:auto;height:auto;gap:2px;}
+  .widget-float.w-popped-out.w-collapsed .fw-collapse,
+  .widget-float.w-popped-out.w-collapsed .cal-collapse{
+    width:20px;height:20px;border-radius:4px;background:none;display:flex;
+    align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .widget-float.w-popped-out.w-collapsed .fw-collapse:hover,
+  .widget-float.w-popped-out.w-collapsed .cal-collapse:hover{background:var(--panel-2);}
+  .widget-float.w-popped-out .w-collapse-arrow{display:inline-block!important;}
+  .widget-float.w-popped-out .w-mini-icon{display:none!important;}
 
   /* ===== Widget: Traductor ===== */
   .tr-widget{
@@ -653,7 +690,7 @@
 <!-- ===================== TEMPORIZADOR FLOTANTE (visible en todas las pestañas) ===================== -->
 <div class="focus-widget widget-float" id="focusWidget">
   <div class="fw-head w-head">
-    <span class="fw-dot" id="fwDot"></span>
+    <span class="w-id-icon" aria-hidden="true"></span>    <span class="fw-dot" id="fwDot"></span>
     <span class="fw-label" id="fwLabel">Temporizador</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="fwWidgetReset" title="Restablecer tamaño y posición">⟲</button>
@@ -685,7 +722,7 @@
 <!-- ===================== CALENDARIO FLOTANTE (visible en todas las pestañas) ===================== -->
 <div class="cal-widget widget-float" id="calWidget">
   <div class="cal-head w-head">
-    <span class="cal-mark"></span>
+    <span class="w-id-icon" aria-hidden="true"></span>    <span class="cal-mark"></span>
     <span class="cal-label">Calendario del ciclo</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="calWidgetReset" title="Restablecer tamaño y posición">⟲</button>
@@ -714,7 +751,7 @@
 <!-- ===================== TRADUCTOR FLOTANTE (visible en todas las pestañas) ===================== -->
 <div class="tr-widget widget-float" id="translatorWidget">
   <div class="tr-head w-head" id="trHead">
-    <span class="tr-mark"></span>
+    <span class="w-id-icon" aria-hidden="true"></span>    <span class="tr-mark"></span>
     <span class="tr-label">Traductor</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="trWidgetReset" title="Restablecer tamaño y posición">⟲</button>
@@ -751,7 +788,7 @@
 <!-- ===================== NOTAS RÁPIDAS FLOTANTE (visible en todas las pestañas) ===================== -->
 <div class="nt-widget widget-float" id="notesWidget">
   <div class="nt-head w-head" id="ntHead">
-    <span class="nt-mark"></span>
+    <span class="w-id-icon" aria-hidden="true"></span>    <span class="nt-mark"></span>
     <span class="nt-label">Notas rápidas</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="ntWidgetReset" title="Restablecer tamaño y posición">⟲</button>
@@ -3166,6 +3203,10 @@
   var WIDGET_ELS = {}; // key -> DOM element, usado también por Ajustes/menú Widgets para mostrar/ocultar al vuelo
   var WIDGET_MIN_W = 170, WIDGET_MIN_H = 150;
   var RESIZE_DIRS = ['n','s','e','w','ne','nw','se','sw'];
+  /* El navegador solo permite UNA ventana Document Picture-in-Picture (la que queda siempre
+     encima de otras apps) a la vez por pestaña. pipSlotKey guarda qué widget la tiene ocupada
+     ahora mismo; el resto de los pop-outs simultáneos usan ventana emergente normal. */
+  var pipSlotKey = null;
 
   /* actualiza solo la flechita del botón minimizar/expandir sin borrar el ícono mini que
      también vive dentro del botón (usar textContent en el botón completo lo borraría) */
@@ -3301,11 +3342,28 @@
     /* --- minimizar/expandir: al expandir sin posición propia, elige un tamaño legible
        y un lugar que no se superponga a otro widget ya maximizado --- */
     function toggleCollapse(){
-      if(isPoppedOut()) return; // no tiene sentido minimizar dentro de su propia ventana
       w.collapsed = !w.collapsed;
       el.classList.toggle('w-collapsed', w.collapsed);
       body.style.display = w.collapsed ? 'none' : 'block';
       setCollapseArrow(collapseBtn, w.collapsed);
+      if(isPoppedOut()){
+        /* Dentro de su propia ventana solo colapsamos el contenido a una franja con el
+           encabezado; si la ventana la abrimos con window.open también intentamos encoger
+           la ventana real al alto de esa franja (Document PiP no permite redimensionar
+           por script, así que ahí solo cambia el contenido). */
+        try{
+          if(popoutWin && !popoutWin.closed && typeof popoutWin.resizeTo === 'function'){
+            if(w.collapsed){
+              var headRect = el.querySelector('.w-head').getBoundingClientRect();
+              popoutWin.resizeTo(Math.max(180, Math.round(headRect.width)), Math.max(48, Math.round(headRect.height)+16));
+            } else {
+              popoutWin.resizeTo(Math.round(w.width || def.legibleW), Math.round(w.height || def.legibleH));
+            }
+          }
+        }catch(e){}
+        saveCfg();
+        return;
+      }
       applySizeForState();
       if(w.collapsed){
         if(w.x==null) layoutWidgetDock();
@@ -3428,18 +3486,20 @@
     });
 
     /* --- botón de "pop-out": saca el widget de la ventana principal a una ventana propia ---
-       Preferimos la API Document Picture-in-Picture (Chrome/Edge de escritorio): abre una
-       ventana flotante de verdad, que el sistema operativo mantiene siempre encima de
-       CUALQUIER aplicación, no solo de esta pestaña — se puede arrastrar sobre otras apps
-       igual que el PiP de un video. Si el navegador no la soporta, cae a una ventana
-       emergente normal (window.open): también "escapa" de la app principal y se puede
-       mover a cualquier parte de la pantalla, pero ya no queda garantizado que quede
-       siempre encima de otras aplicaciones — eso es el propio navegador/SO quien lo decide,
-       ninguna página web puede forzarlo por window.open. En ambos casos, el widget real
-       (con todos sus botones y su estado) se traslada a la nueva ventana; al cerrarla,
-       vuelve solo a su lugar en la app principal. */
+       Para el PRIMER widget que sale, si el navegador soporta Document Picture-in-Picture
+       (Chrome/Edge de escritorio) se usa esa API: abre una ventana flotante de verdad, que
+       el sistema operativo mantiene siempre encima de CUALQUIER aplicación, no solo de esta
+       pestaña. El navegador solo permite UNA ventana de esas por pestaña (limitación de la
+       API, no de esta app) — así que si el usuario saca varios widgets a la vez, el primero
+       obtiene esa ventana "siempre encima" y los siguientes se abren en ventanas emergentes
+       normales (también independientes y movibles, pero sin la garantía de quedar por
+       encima de otras aplicaciones). En todos los casos el widget real, con su estado y
+       botones, se traslada a la nueva ventana; al cerrarla vuelve solo a su lugar. */
     var popoutBtn = document.getElementById(def.popoutId);
-    var popoutWin = null, placeholder = null, restored = true;
+    var popoutWin = null, placeholder = null, restored = true, usingPip = false;
+    var idIconHost = el.querySelector('.w-id-icon');
+    var sourceIconSvg = collapseBtn ? collapseBtn.querySelector('.w-mini-icon svg') : null;
+    if(idIconHost && sourceIconSvg) idIconHost.appendChild(sourceIconSvg.cloneNode(true));
 
     function copyStylesInto(targetDoc){
       Array.prototype.forEach.call(document.querySelectorAll('style'), function(s){
@@ -3451,9 +3511,27 @@
       targetDoc.documentElement.className = document.documentElement.className;
     }
 
+    /* Favicon de la ventana emergente (pestaña/alt-tab): reutiliza el mismo ícono del
+       widget sobre un fondo de color fijo, para poder identificar cada ventana entre
+       varias abiertas a la vez. Document PiP no tiene favicon propio, así que esto solo
+       aplica a la ventana emergente normal (window.open). */
+    function buildFaviconHref(){
+      if(!sourceIconSvg) return null;
+      try{
+        var inner = sourceIconSvg.innerHTML;
+        var markup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">'
+          + '<rect x="0" y="0" width="24" height="24" rx="6" fill="#c9d97a"/>'
+          + '<g fill="none" stroke="#222615" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">' + inner + '</g>'
+          + '</svg>';
+        return 'data:image/svg+xml,' + markup.replace(/#/g, '%23').replace(/\s+/g, ' ');
+      }catch(e){ return null; }
+    }
+
     function restoreWidget(){
       if(restored || !isPoppedOut()) return;
       restored = true;
+      if(usingPip && pipSlotKey === def.key) pipSlotKey = null;
+      usingPip = false;
       if(placeholder && placeholder.parentNode){ placeholder.parentNode.replaceChild(el, placeholder); }
       else { document.body.appendChild(el); }
       placeholder = null;
@@ -3469,12 +3547,22 @@
     function attachToWindow(win, isPip){
       restored = false;
       popoutWin = win;
+      usingPip = isPip;
+      if(isPip) pipSlotKey = def.key;
       try{
         copyStylesInto(win.document);
         win.document.title = def.title + ' — Bitácora de Ciclo';
         win.document.body.style.margin = '0';
         win.document.body.style.background = 'var(--bg)';
         win.document.body.style.overflow = 'hidden';
+        if(!isPip){
+          var favHref = buildFaviconHref();
+          if(favHref){
+            var link = win.document.createElement('link');
+            link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = favHref;
+            win.document.head.appendChild(link);
+          }
+        }
       }catch(e){ logError('popout:setup:'+def.key, e); }
       placeholder = document.createComment('popout-'+def.key);
       el.parentNode.insertBefore(placeholder, el);
@@ -3511,7 +3599,8 @@
       var rect = el.getBoundingClientRect();
       var reqW = Math.round((w.width || rect.width || def.legibleW));
       var reqH = Math.round((w.height || rect.height || def.legibleH));
-      if('documentPictureInPicture' in window){
+      /* el cupo de Document PiP solo se ofrece si ningún otro widget lo está usando ya */
+      if('documentPictureInPicture' in window && !pipSlotKey){
         window.documentPictureInPicture.requestWindow({width:reqW, height:reqH}).then(function(pipWin){
           attachToWindow(pipWin, true);
         }).catch(function(e){
