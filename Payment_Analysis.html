@@ -510,13 +510,16 @@
   .widget-float.w-collapsed .w-mini-icon svg{width:100%;height:100%;}
 
   /* ===== Sacar widget de la ventana principal =====
-     Botón "pop-out": si el navegador soporta Document Picture-in-Picture (Chrome/Edge de
-     escritorio) el widget se abre en una ventana flotante REAL que el sistema operativo
-     mantiene siempre encima de cualquier otra aplicación, no solo encima de esta pestaña.
-     El navegador solo permite UNA de esas ventanas a la vez por pestaña: si ya hay una en
-     uso, los siguientes widgets que "salgan" usan una ventana emergente normal (también
-     independiente, pero sin la garantía de quedar siempre encima de otras apps — eso lo
-     decide el navegador/SO, ninguna página puede forzarlo fuera de Document PiP). */
+     Botón "pop-out": el widget se traslada (con todo su estado y botones) a una ventana
+     emergente propia del navegador (window.open) — misma mecánica para los 4 widgets,
+     sin importar si es el primero o el tercero que sale, para que todos se comporten igual.
+     Se probó usar Document Picture-in-Picture para el primer widget (ventana "siempre
+     encima de otras apps"), pero esa API trata esa ventana de forma especial y distinta a
+     una normal — al combinarla con las demás ventanas emergentes, la interacción se volvía
+     errática/lenta. Se descartó a favor de consistencia: ninguna ventana emergente puede
+     garantizarse "siempre encima de otras aplicaciones" por script — eso lo decide el
+     navegador/SO — pero sí queda siempre independiente, movible a cualquier parte de la
+     pantalla, y minimizable, igual para todos. */
   .w-popout-btn.active{color:var(--accent);}
   .widget-float.w-popped-out{
     position:static!important;width:100%!important;height:100vh!important;
@@ -694,7 +697,7 @@
     <span class="fw-label" id="fwLabel">Temporizador</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="fwWidgetReset" title="Restablecer tamaño y posición">⟲</button>
-      <button class="w-size-btn w-popout-btn" id="fwPopout" title="Abrir en ventana flotante independiente">⤢</button>
+      <button class="w-size-btn w-popout-btn" id="fwPopout" title="Abrir en ventana independiente">⤢</button>
       <button class="fw-collapse" id="fwCollapse" title="Minimizar/expandir">
         <span class="w-collapse-arrow">▾</span>
         <span class="w-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l3 2"></path><path d="M9 2h6"></path><path d="M12 2v2"></path></svg></span>
@@ -726,7 +729,7 @@
     <span class="cal-label">Calendario del ciclo</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="calWidgetReset" title="Restablecer tamaño y posición">⟲</button>
-      <button class="w-size-btn w-popout-btn" id="calPopout" title="Abrir en ventana flotante independiente">⤢</button>
+      <button class="w-size-btn w-popout-btn" id="calPopout" title="Abrir en ventana independiente">⤢</button>
       <button class="cal-collapse" id="calCollapse" title="Minimizar/expandir">
         <span class="w-collapse-arrow">▾</span>
         <span class="w-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg></span>
@@ -755,7 +758,7 @@
     <span class="tr-label">Traductor</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="trWidgetReset" title="Restablecer tamaño y posición">⟲</button>
-      <button class="w-size-btn w-popout-btn" id="trPopout" title="Abrir en ventana flotante independiente">⤢</button>
+      <button class="w-size-btn w-popout-btn" id="trPopout" title="Abrir en ventana independiente">⤢</button>
       <button class="cal-collapse" id="trCollapse" title="Minimizar/expandir">
         <span class="w-collapse-arrow">▾</span>
         <span class="w-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7M7.5 3v2M4 8c1.5 3 3.5 4.7 6 5.8M10.5 5c-1 3.5-3 6-6.5 8"></path><path d="M13 21l4-9 4 9M14.5 18h5"></path></svg></span>
@@ -792,7 +795,7 @@
     <span class="nt-label">Notas rápidas</span>
     <div class="w-head-btns">
       <button class="w-size-btn" id="ntWidgetReset" title="Restablecer tamaño y posición">⟲</button>
-      <button class="w-size-btn w-popout-btn" id="ntPopout" title="Abrir en ventana flotante independiente">⤢</button>
+      <button class="w-size-btn w-popout-btn" id="ntPopout" title="Abrir en ventana independiente">⤢</button>
       <button class="cal-collapse" id="ntCollapse" title="Minimizar/expandir">
         <span class="w-collapse-arrow">▾</span>
         <span class="w-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="13" height="16" rx="2"></rect><path d="M8 2.5h5v2H8z"></path><path d="M8 10h6M8 14h4"></path><path d="M15 17l5-5 2 2-5 5h-2v-2z"></path></svg></span>
@@ -3203,10 +3206,6 @@
   var WIDGET_ELS = {}; // key -> DOM element, usado también por Ajustes/menú Widgets para mostrar/ocultar al vuelo
   var WIDGET_MIN_W = 170, WIDGET_MIN_H = 150;
   var RESIZE_DIRS = ['n','s','e','w','ne','nw','se','sw'];
-  /* El navegador solo permite UNA ventana Document Picture-in-Picture (la que queda siempre
-     encima de otras apps) a la vez por pestaña. pipSlotKey guarda qué widget la tiene ocupada
-     ahora mismo; el resto de los pop-outs simultáneos usan ventana emergente normal. */
-  var pipSlotKey = null;
 
   /* actualiza solo la flechita del botón minimizar/expandir sin borrar el ícono mini que
      también vive dentro del botón (usar textContent en el botón completo lo borraría) */
@@ -3486,17 +3485,18 @@
     });
 
     /* --- botón de "pop-out": saca el widget de la ventana principal a una ventana propia ---
-       Para el PRIMER widget que sale, si el navegador soporta Document Picture-in-Picture
-       (Chrome/Edge de escritorio) se usa esa API: abre una ventana flotante de verdad, que
-       el sistema operativo mantiene siempre encima de CUALQUIER aplicación, no solo de esta
-       pestaña. El navegador solo permite UNA ventana de esas por pestaña (limitación de la
-       API, no de esta app) — así que si el usuario saca varios widgets a la vez, el primero
-       obtiene esa ventana "siempre encima" y los siguientes se abren en ventanas emergentes
-       normales (también independientes y movibles, pero sin la garantía de quedar por
-       encima de otras aplicaciones). En todos los casos el widget real, con su estado y
-       botones, se traslada a la nueva ventana; al cerrarla vuelve solo a su lugar. */
+       Siempre la misma mecánica para los 4 widgets, sea el primero o el último que sale:
+       una ventana emergente del navegador (window.open) recibe el widget real (con todo su
+       estado y botones), que ahí se puede mover, minimizar y cerrar igual que cualquiera.
+       No usamos Document Picture-in-Picture: esa API sí logra una ventana "siempre encima
+       de otras apps", pero solo permite una por pestaña y la trata de forma especial (sin
+       favicon propio, sin poder redimensionarla por script) — al combinarla con las demás
+       ventanas emergentes, la app se sentía errática y lenta. Se prefiere consistencia:
+       ninguna ventana emergente puede garantizarse "siempre encima de otras aplicaciones"
+       por script — eso lo decide el navegador/SO — pero sí queda igual de independiente,
+       movible y minimizable para los 4 widgets. */
     var popoutBtn = document.getElementById(def.popoutId);
-    var popoutWin = null, placeholder = null, restored = true, usingPip = false;
+    var popoutWin = null, placeholder = null, restored = true;
     var idIconHost = el.querySelector('.w-id-icon');
     var sourceIconSvg = collapseBtn ? collapseBtn.querySelector('.w-mini-icon svg') : null;
     if(idIconHost && sourceIconSvg) idIconHost.appendChild(sourceIconSvg.cloneNode(true));
@@ -3513,8 +3513,7 @@
 
     /* Favicon de la ventana emergente (pestaña/alt-tab): reutiliza el mismo ícono del
        widget sobre un fondo de color fijo, para poder identificar cada ventana entre
-       varias abiertas a la vez. Document PiP no tiene favicon propio, así que esto solo
-       aplica a la ventana emergente normal (window.open). */
+       varias abiertas a la vez — igual para los 4 widgets. */
     function buildFaviconHref(){
       if(!sourceIconSvg) return null;
       try{
@@ -3530,8 +3529,6 @@
     function restoreWidget(){
       if(restored || !isPoppedOut()) return;
       restored = true;
-      if(usingPip && pipSlotKey === def.key) pipSlotKey = null;
-      usingPip = false;
       if(placeholder && placeholder.parentNode){ placeholder.parentNode.replaceChild(el, placeholder); }
       else { document.body.appendChild(el); }
       placeholder = null;
@@ -3541,27 +3538,23 @@
       if(w.x!=null) applyPosition();
       requestAnimationFrame(clampToViewport);
       popoutWin = null;
-      if(popoutBtn){ popoutBtn.classList.remove('active'); popoutBtn.title = 'Abrir en ventana flotante independiente'; }
+      if(popoutBtn){ popoutBtn.classList.remove('active'); popoutBtn.title = 'Abrir en ventana independiente'; }
     }
 
-    function attachToWindow(win, isPip){
+    function attachToWindow(win){
       restored = false;
       popoutWin = win;
-      usingPip = isPip;
-      if(isPip) pipSlotKey = def.key;
       try{
         copyStylesInto(win.document);
         win.document.title = def.title + ' — Bitácora de Ciclo';
         win.document.body.style.margin = '0';
         win.document.body.style.background = 'var(--bg)';
         win.document.body.style.overflow = 'hidden';
-        if(!isPip){
-          var favHref = buildFaviconHref();
-          if(favHref){
-            var link = win.document.createElement('link');
-            link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = favHref;
-            win.document.head.appendChild(link);
-          }
+        var favHref = buildFaviconHref();
+        if(favHref){
+          var link = win.document.createElement('link');
+          link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = favHref;
+          win.document.head.appendChild(link);
         }
       }catch(e){ logError('popout:setup:'+def.key, e); }
       placeholder = document.createComment('popout-'+def.key);
@@ -3573,25 +3566,14 @@
       win.document.body.appendChild(el);
       if(popoutBtn){
         popoutBtn.classList.add('active');
-        popoutBtn.title = isPip ? 'Ventana flotante activa (siempre encima de otras apps) — clic para regresar' : 'Ventana independiente activa — clic para regresar';
+        popoutBtn.title = 'Ventana independiente activa — clic para regresar';
       }
       win.addEventListener('pagehide', restoreWidget, {once:true});
       win.addEventListener('unload', restoreWidget, {once:true});
-      if(!isPip){
-        var poll = setInterval(function(){
-          if(win.closed){ clearInterval(poll); restoreWidget(); }
-        }, 500);
-      }
+      var poll = setInterval(function(){
+        if(win.closed){ clearInterval(poll); restoreWidget(); }
+      }, 500);
       saveCfg();
-    }
-
-    function openFallbackPopup(reqW, reqH){
-      var win = window.open('', 'popout_'+def.key, 'popup,width='+reqW+',height='+reqH+',resizable=yes');
-      if(!win){
-        alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio y vuelve a intentarlo.');
-        return;
-      }
-      attachToWindow(win, false);
     }
 
     function popOut(){
@@ -3599,17 +3581,12 @@
       var rect = el.getBoundingClientRect();
       var reqW = Math.round((w.width || rect.width || def.legibleW));
       var reqH = Math.round((w.height || rect.height || def.legibleH));
-      /* el cupo de Document PiP solo se ofrece si ningún otro widget lo está usando ya */
-      if('documentPictureInPicture' in window && !pipSlotKey){
-        window.documentPictureInPicture.requestWindow({width:reqW, height:reqH}).then(function(pipWin){
-          attachToWindow(pipWin, true);
-        }).catch(function(e){
-          logError('popout:pip:'+def.key, e);
-          openFallbackPopup(reqW, reqH);
-        });
-      } else {
-        openFallbackPopup(reqW, reqH);
+      var win = window.open('', 'popout_'+def.key, 'popup,width='+reqW+',height='+reqH+',resizable=yes');
+      if(!win){
+        alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio y vuelve a intentarlo.');
+        return;
       }
+      attachToWindow(win);
     }
 
     if(popoutBtn) popoutBtn.addEventListener('click', function(e){
