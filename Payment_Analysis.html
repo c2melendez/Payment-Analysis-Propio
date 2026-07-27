@@ -1330,9 +1330,8 @@
     Object.keys(calls).forEach(function(dISO){
       (calls[dISO]||[]).forEach(function(c){
         out.push({
-          id: c.id, date: dISO, min: Number(c.min||0), usd: Number(c.usd||0),
-          segment: c.segment||'', serviceLine: c.line||'',
-          adj: c.adj, hour: c.hour
+          id: c.id, date: dISO, min: Number(c.min||0),
+          callStart: c.start||'', source: c.source||''
         });
       });
     });
@@ -1415,7 +1414,9 @@
         return {id:r.id, min:r.min, usd:r.usd, nota:r.nota||''};
       });
       mergeById(calls, remoteCalls, function(r){
-        return {id:r.id, min:r.min, usd:r.usd, segment:r.segment||'', line:r.serviceLine||''};
+        var hour = r.callStart ? parseHour12(r.callStart) : null;
+        var segment = hour!=null ? segmentOfHour(hour) : null;
+        return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||''};
       });
       localStorage.setItem('bitacora_entries', JSON.stringify(entries));
       localStorage.setItem('bitacora_calls', JSON.stringify(calls));
