@@ -1389,13 +1389,14 @@
     // El servidor completa lo que falta localmente; lo local nunca se borra por esto.
     var seen = {};
     Object.keys(localMap).forEach(function(dISO){
-      (localMap[dISO]||[]).forEach(function(item){ if(item && item.id) seen[item.id] = true; });
+      var list = Array.isArray(localMap[dISO]) ? localMap[dISO] : [];
+      list.forEach(function(item){ if(item && item.id) seen[item.id] = true; });
     });
     remoteList.forEach(function(r){
       if(!r || !r.id || seen[r.id]) return;
       var dISO = r.date;
       if(!dISO) return;
-      if(!localMap[dISO]) localMap[dISO] = [];
+      if(!Array.isArray(localMap[dISO])) localMap[dISO] = [];
       localMap[dISO].push(fields(r));
       seen[r.id] = true;
     });
@@ -2148,7 +2149,7 @@
       });
       box.querySelectorAll('button[data-id]').forEach(function(b){
         b.addEventListener('click', function(){
-          entries[dISO] = entries[dISO].filter(function(e){return e.id!==b.dataset.id;});
+          entries[dISO] = (Array.isArray(entries[dISO])?entries[dISO]:[]).filter(function(e){return e.id!==b.dataset.id;});
           saveEntries(); renderAll();
         });
       });
@@ -2274,7 +2275,7 @@
     });
     box.querySelectorAll('button[data-id]').forEach(function(b){
       b.addEventListener('click', function(){
-        entries[editingISO] = entries[editingISO].filter(function(e){return e.id!==b.dataset.id;});
+        entries[editingISO] = (Array.isArray(entries[editingISO])?entries[editingISO]:[]).filter(function(e){return e.id!==b.dataset.id;});
         saveEntries(); renderDayEntries(); renderAll();
       });
     });
@@ -2288,7 +2289,7 @@
       logError('dayBtnAdd:validación', 'valor inválido: '+raw);
       return;
     }
-    if(!entries[editingISO]) entries[editingISO]=[];
+    if(!Array.isArray(entries[editingISO])) entries[editingISO]=[];
     entries[editingISO].push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), min:min, nota:nota});
     saveEntries();
 
@@ -2301,7 +2302,7 @@
       var startLabel = callStartVal ? fmtCallStart(callStartVal) : '';
       var hour = callStartVal ? parseInt(callStartVal.split(':')[0],10) : null;
       var segment = hour!=null ? segmentOfHour(hour) : null;
-      if(!calls[callDISO]) calls[callDISO]=[];
+      if(!Array.isArray(calls[callDISO])) calls[callDISO]=[];
       calls[callDISO].push({
         id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         min: min, start: startLabel, hour: hour, segment: segment, source: 'manual'
@@ -2809,7 +2810,7 @@
       if(!confirm('Ingresaste '+min+' minutos (más de 24 horas). ¿Confirmas que es correcto?')) return;
     }
     var dISO = iso(todayDate());
-    if(!entries[dISO]) entries[dISO]=[];
+    if(!Array.isArray(entries[dISO])) entries[dISO]=[];
     entries[dISO].push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), min:min, nota:nota});
     saveEntries();
     document.getElementById('inMin').value='';
