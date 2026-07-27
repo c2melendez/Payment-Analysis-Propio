@@ -1418,6 +1418,11 @@
         var segment = hour!=null ? segmentOfHour(hour) : null;
         return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||''};
       });
+      // El contador de "Hoy" se calcula desde `entries`, no desde `calls` —
+      // sin esto, una llamada traída del backend no sube el minutero principal.
+      mergeById(entries, remoteCalls, function(r){
+        return {id:r.id, min:r.min, nota:'Sincronizado del backend'+(r.callStart?' · '+r.callStart:'')};
+      });
       localStorage.setItem('bitacora_entries', JSON.stringify(entries));
       localStorage.setItem('bitacora_calls', JSON.stringify(calls));
       cfg.sync.lastSyncAt = Date.now();
@@ -3044,6 +3049,15 @@
           });
           var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
           saveCalls();
+
+          // El contador de "Hoy" (y los totales del ciclo) se calculan a partir
+          // de `entries`, no de `calls` — sin esto, una llamada importada aparece
+          // en el detalle pero nunca sube el minutero principal.
+          mergeById(entries, callItems, function(r){
+            return {id:r.id, min:r.min, nota:'Capturado por extensión'+(r.callStart?' · '+r.callStart:'')};
+          });
+          saveEntries();
+
           parts.push((after-before)+' llamada(s) nueva(s) de hoy');
         }
 
