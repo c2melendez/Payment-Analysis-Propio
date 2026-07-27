@@ -13,6 +13,7 @@
      Netlify, Vercel, etc.) para poder "Instalar" la app desde el navegador. -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#12140f">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Payment Analysis Propio">
@@ -877,8 +878,8 @@
           </div>
 
           <div class="entry-form">
-            <input type="number" id="inMin" placeholder="min" min="1">
-            <input type="text" id="inNota" placeholder="nota (opcional)">
+            <input type="number" id="inMin" placeholder="min" min="1" autocomplete="off">
+            <input type="text" id="inNota" placeholder="nota (opcional)" autocomplete="off">
             <button class="btn" id="btnAdd">+ Agregar</button>
           </div>
 
@@ -1099,11 +1100,11 @@
       </div>
       <div class="field">
         <label>URL del servidor</label>
-        <input type="text" id="cfgSyncUrl" placeholder="http://localhost:5057 o tu IP de Tailscale">
+        <input type="text" id="cfgSyncUrl" placeholder="http://localhost:5057 o tu IP de Tailscale" autocomplete="off">
       </div>
       <div class="field">
         <label>Token</label>
-        <input type="password" id="cfgSyncToken" placeholder="El mismo BITACORA_TOKEN del backend">
+        <input type="password" id="cfgSyncToken" placeholder="El mismo BITACORA_TOKEN del backend" autocomplete="new-password">
       </div>
       <div class="rate-status" id="syncStatus">—</div>
       <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -1141,8 +1142,8 @@
   <div class="modal">
     <h3 id="dayModalTitle">Editar día</h3>
     <div class="entry-form">
-      <input type="number" id="dayInMin" placeholder="min" min="1">
-      <input type="text" id="dayInNota" placeholder="nota (opcional)">
+      <input type="number" id="dayInMin" placeholder="min" min="1" autocomplete="off">
+      <input type="text" id="dayInNota" placeholder="nota (opcional)" autocomplete="off">
       <button class="btn sm" id="dayBtnAdd">+ Agregar</button>
     </div>
     <div class="entry-form" style="margin-top:-6px;">
