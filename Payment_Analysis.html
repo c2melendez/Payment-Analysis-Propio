@@ -1421,7 +1421,11 @@
       });
       // El contador de "Hoy" se calcula desde `entries`, no desde `calls` —
       // sin esto, una llamada traída del backend no sube el minutero principal.
-      mergeById(entries, remoteCalls, function(r){
+      // IMPORTANTE: solo agregar a entries las llamadas cuya fecha NO está ya
+      // cubierta por un registro auditado (imp_*) — de lo contrario el pull
+      // apila los minutos individuales encima del resumen auditado y multiplica.
+      var callsForEntries = remoteCalls.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+      mergeById(entries, callsForEntries, function(r){
         return {id:r.id, min:r.min, nota:'Sincronizado del backend'+(r.callStart?' · '+r.callStart:'')};
       });
       localStorage.setItem('bitacora_entries', JSON.stringify(entries));
@@ -3038,12 +3042,28 @@
         var data = JSON.parse(ev.target.result);
         var parts = [];
 
-        // "calls": llamadas del ciclo en curso capturadas por la extensión
-        // (Call Date / Call Start / Duration) — se fusionan por id, sin pisar nada.
+        // ORDEN CORRECTO: histórico primero para que isAuditedDate sea preciso
+        // cuando filtremos las llamadas en vivo.
+
+        // 1) "history": histórico auditado de Propio Analytics. Prioridad máxima:
+        //    reemplaza cualquier registro previo de esas fechas.
+        var historyItems = data.history || [];
+        if(Array.isArray(historyItems) && historyItems.length>0){
+          var histResult = importRowsToEntries(historyItems);
+          saveEntries(); saveCalls();
+          parts.push(histResult.days+' día(s) de histórico ('+histResult.rows+' fila(s))');
+        }
+
+        // 2) "calls": llamadas del ciclo en curso capturadas por la extensión
+        //    (Call Date / Call Start / Duration). Solo se agregan si la fecha
+        //    NO está ya cubierta por el histórico auditado — así evitamos apilar
+        //    llamadas individuales encima del resumen del histórico.
         var callItems = data.calls || [];
         if(Array.isArray(callItems) && callItems.length>0){
+          // Filtrar: descartar fechas que ya tienen entrada auditada (imp_*)
+          var liveCallItems = callItems.filter(function(r){ return r.date && !isAuditedDate(r.date); });
           var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
-          mergeById(calls, callItems, function(r){
+          mergeById(calls, liveCallItems, function(r){
             var hour = r.callStart ? parseHour12(r.callStart) : null;
             var segment = hour!=null ? segmentOfHour(hour) : null;
             return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||'portal-auto'};
@@ -3054,21 +3074,13 @@
           // El contador de "Hoy" (y los totales del ciclo) se calculan a partir
           // de `entries`, no de `calls` — sin esto, una llamada importada aparece
           // en el detalle pero nunca sube el minutero principal.
-          mergeById(entries, callItems, function(r){
+          mergeById(entries, liveCallItems, function(r){
             return {id:r.id, min:r.min, nota:'Capturado por extensión'+(r.callStart?' · '+r.callStart:'')};
           });
           saveEntries();
 
-          parts.push((after-before)+' llamada(s) nueva(s) de hoy');
-        }
-
-        // "history": histórico de Propio Analytics — mismo formato que la hoja de
-        // cálculo que ya se importa, así que reutiliza el mismo importador tal cual.
-        var historyItems = data.history || [];
-        if(Array.isArray(historyItems) && historyItems.length>0){
-          var histResult = importRowsToEntries(historyItems);
-          saveEntries(); saveCalls();
-          parts.push(histResult.days+' día(s) de histórico ('+histResult.rows+' fila(s))');
+          var newLive = after - before;
+          if(newLive > 0) parts.push(newLive+' llamada(s) nueva(s) en vivo');
         }
 
         renderAll();
@@ -3125,13 +3137,20 @@
   function mergeImportedDay(dISO, min, usd, count, callList){
     var nota = 'Importado de hoja de cálculo — auditado ('+count+' fila'+(count===1?'':'s')+')';
     entries[dISO] = [{
-      id:'imp_'+dISO+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      id:'imp_'+dISO,
       min:round2(min), usd:round2(usd), nota:nota
     }];
     // El detalle por llamada también se reemplaza por completo para ese día (mismo criterio
     // que las entradas agregadas: lo importado/auditado manda sobre cualquier carga previa).
     calls[dISO] = callList;
   }
+  /* Devuelve true si el día ya tiene una entrada auditada (importada del histórico).
+     Se usa para evitar que pullFromServer o el importador de la extensión apile
+     llamadas individuales encima del resumen auditado, duplicando los minutos. */
+  function isAuditedDate(dISO){
+    return (entries[dISO]||[]).some(function(e){ return e.id && e.id.indexOf('imp_')===0; });
+  }
+
   function parseMoneyLoose(raw){
     var s = String(raw==null?'':raw).replace(/[^0-9.\-]/g,'');
     if(s==='') return NaN;
@@ -3147,6 +3166,7 @@
     var lineKey = findKey(keys, LINE_ALIASES);
     var startKey = findKey(keys, STARTTIME_ALIASES);
     var agentKey = findKey(keys, AGENT_ALIASES);
+    var pidKey   = findKey(keys, ['project id','projectid','project_id']);
     if(!dateKey || !minKey){ throw new Error('No se encontraron columnas de fecha/minutos.'); }
     var byDay = {};
     var rowsUsed = 0;
@@ -3164,11 +3184,14 @@
       var startRaw = startKey ? String(row[startKey]||'').trim() : '';
       var hour = startKey ? parseHour12(row[startKey]) : null;
       var segment = (hour!==null && hour!==undefined) ? segmentOfHour(hour) : null;
+      var pid = pidKey ? String(row[pidKey]||'').trim() : '';
       if(!byDay[dISO]) byDay[dISO] = {min:0, usd:0, count:0, calls:[]};
       byDay[dISO].min += min;
       byDay[dISO].usd += usd;
       byDay[dISO].count += 1;
-      byDay[dISO].calls.push({min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:'import'});
+      /* ID determinístico: usa Project ID del histórico para que el mismo registro
+         siempre tenga el mismo id y el backend haga upsert en vez de insertar duplicados. */
+      byDay[dISO].calls.push({id: pid ? 'hist_'+pid : 'hist_'+dISO+'_'+rowsUsed, min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:'import'});
       rowsUsed++;
       if(agentKey){
         var aid = String(row[agentKey]||'').trim();
