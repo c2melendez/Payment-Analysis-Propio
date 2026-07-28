@@ -826,6 +826,7 @@
   </div>
   <div class="top-right">
     <div class="clock" id="clockBox">&nbsp;</div>
+    <button class="btn ghost sm" id="btnSyncNowHome" title="Traer la última data del backend (portal + dashboard auditado)">↻ Sincronizar</button>
     <button class="gear" id="btnSettings" title="Ajustes">⚙</button>
   </div>
 </header>
@@ -1248,6 +1249,73 @@
      { 'YYYY-MM-DD': [{min, usd, adj, line:'Audio'|'Video'|'', hour, segment}, ...] } */
   var calls = loadJSON('bitacora_calls', {});
 
+  /* ---------- Jerarquía de fuentes de datos ----------
+     Define qué fuente "gana" cuando la misma llamada llega por más de un
+     camino (esto es lo que evita la duplicación x6: antes se fusionaba todo
+     por "id" generado, y una misma llamada capturada varias veces por rutas
+     distintas obtenía ids distintos y se apilaba en vez de sustituirse).
+     Mayor número = mayor prioridad — ver Prompt.md para la jerarquía completa
+     (HOY/CICLO/REPORTES). */
+  var SOURCE_PRIORITY = {
+    'manual': 1,
+    'portal-json': 2,
+    'portal-auto': 3,      // captura en vivo del portal vía backend
+    'portal-backend': 3,
+    'dashboard-json': 4,
+    'import': 4,           // compatibilidad: source usado por importRowsToEntries
+    'dashboard-backend': 5 // interpreter-analytics/dashboard vía backend — máxima prioridad (auditado)
+  };
+  function sourcePriority(src){ return SOURCE_PRIORITY[src] || 0; }
+  /* Identidad real de una llamada = Fecha + hora de inicio (nunca el id
+     generado ni la duración, que puede cambiar tras la auditoría). Dos
+     registros con la misma fecha+hora son SIEMPRE la misma llamada. */
+  function callIdentityKey(dISO, startLabel){
+    var norm = String(startLabel||'').trim().toUpperCase().replace(/\s+/g,' ');
+    if(!dISO || !norm) return null;
+    return dISO+'|'+norm;
+  }
+  /* Combina remoteList (llamadas planas del servidor) con localCallsMap
+     resolviendo conflictos por IDENTIDAD (fecha+hora), no por id: si dos
+     registros son la misma llamada, se conserva solo el de mayor jerarquía
+     y se actualiza en el lugar en vez de agregarse como fila nueva. Las
+     llamadas sin hora de inicio capturada (no se puede determinar identidad)
+     se deduplican solo por id, como antes. */
+  function upsertCallsByIdentity(localCallsMap, remoteList){
+    var byKey = {}, byId = {};
+    Object.keys(localCallsMap).forEach(function(dISO){
+      (localCallsMap[dISO]||[]).forEach(function(item){
+        if(!item) return;
+        if(item.id) byId[item.id] = {dISO:dISO, item:item};
+        var key = callIdentityKey(dISO, item.start);
+        if(key) byKey[key] = {dISO:dISO, item:item};
+      });
+    });
+    remoteList.forEach(function(r){
+      if(!r || !r.id || !r.date) return;
+      var hour = r.callStart ? parseHour12(r.callStart) : null;
+      var segment = hour!=null ? segmentOfHour(hour) : null;
+      var mapped = {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||''};
+      var key = callIdentityKey(r.date, r.callStart);
+      var prio = sourcePriority(mapped.source);
+      if(key && byKey[key]){
+        var existing = byKey[key];
+        if(existing.item.id !== mapped.id && prio < sourcePriority(existing.item.source)) return; // fuente inferior: se descarta
+        var arr = localCallsMap[existing.dISO];
+        var idx = arr.indexOf(existing.item);
+        if(idx>-1) arr.splice(idx,1,mapped); else arr.push(mapped);
+        byKey[key] = {dISO:existing.dISO, item:mapped};
+        byId[mapped.id] = {dISO:existing.dISO, item:mapped};
+        return;
+      }
+      if(byId[r.id]) return; // ya está por id (sin hora capturada) — no duplicar
+      if(!Array.isArray(localCallsMap[r.date])) localCallsMap[r.date] = [];
+      localCallsMap[r.date].push(mapped);
+      byId[r.id] = {dISO:r.date, item:mapped};
+      if(key) byKey[key] = {dISO:r.date, item:mapped};
+    });
+    return localCallsMap;
+  }
+
   /* Purga única de la carga histórica que traía la app en versiones anteriores
      (identificada con ids que empiezan en 'hist_'). El usuario prefiere recargar
      el histórico manualmente con sus propias hojas de cálculo, revisadas por él. */
@@ -1263,6 +1331,46 @@
     });
     try{ localStorage.setItem('bitacora_hist_purge_v1','1'); }catch(e){}
     saveEntries();
+  })();
+
+  /* Limpieza única de la duplicidad x4/x6 ya acumulada localmente por el bug
+     de sincronización (mergeById fusionaba por id generado, no por identidad
+     real de la llamada, así que la misma llamada recapturada se apilaba en
+     vez de sustituirse). Deja solo un registro por (fecha+hora de inicio),
+     respetando la jerarquía de fuentes; para entradas del día ya auditadas
+     (id 'imp_YYYY-MM-DD'), conserva solo una. */
+  (function dedupeAccumulatedDuplicates(){
+    var done = false;
+    try{ done = localStorage.getItem('bitacora_dedup_v1')==='1'; }catch(e){}
+    if(done) return;
+    Object.keys(calls).forEach(function(dISO){
+      var arr = calls[dISO]||[];
+      var byKey = {}, order = [], noKey = [];
+      arr.forEach(function(c){
+        if(!c) return;
+        var key = callIdentityKey(dISO, c.start);
+        if(!key){ noKey.push(c); return; }
+        if(!(key in byKey)) order.push(key);
+        var prev = byKey[key];
+        if(!prev || sourcePriority(c.source) >= sourcePriority(prev.source)) byKey[key] = c;
+      });
+      calls[dISO] = order.map(function(k){ return byKey[k]; }).concat(noKey);
+    });
+    Object.keys(entries).forEach(function(dISO){
+      var arr = entries[dISO]||[];
+      var canon = arr.filter(function(e){ return e && e.id === 'imp_'+dISO; });
+      if(canon.length){ entries[dISO] = [canon[canon.length-1]]; return; }
+      var seen = {}, out = [];
+      arr.forEach(function(e){
+        if(!e) return;
+        var k = (e.nota||'')+'|'+e.min;
+        if(seen[k]) return;
+        seen[k] = true; out.push(e);
+      });
+      entries[dISO] = out;
+    });
+    try{ localStorage.setItem('bitacora_dedup_v1','1'); }catch(e){}
+    saveEntries(); saveCalls();
   })();
 
   function loadJSON(key, fallback){
@@ -1418,16 +1526,24 @@
       // Esto permite que el histórico capturado por la extensión aparezca en la app
       // sin que el usuario tenga que importar el JSON manualmente.
       if(remoteHistory.length > 0){
-        try{ importRowsToEntries(remoteHistory); } catch(e){ console.warn('[Bitácora] Error procesando histórico del backend:', e); }
+        try{ importRowsToEntries(remoteHistory, 'dashboard-backend'); } catch(e){ console.warn('[Bitácora] Error procesando histórico del backend:', e); }
       }
-      mergeById(entries, remoteEntries, function(r){
-        return {id:r.id, min:r.min, usd:r.usd, nota:r.nota||''};
-      });
-      mergeById(calls, remoteCalls, function(r){
-        var hour = r.callStart ? parseHour12(r.callStart) : null;
-        var segment = hour!=null ? segmentOfHour(hour) : null;
-        return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||''};
-      });
+      // NOTA: aquí antes iba un mergeById(entries, remoteEntries, ...) crudo,
+      // SIN deduplicar, justo antes del bloque de limpieza de abajo. Ese
+      // merge temprano era la causa principal de la duplicación x4/x6: metía
+      // en `entries` todos los restos de importaciones/capturas viejas con id
+      // distinto ANTES de que la lógica de limpieza pudiera filtrarlos. Se
+      // eliminó — el único merge de `entries` válido es el de
+      // `cleanRemoteEntries` más abajo, ya deduplicado por fecha.
+      //
+      // Llamadas del portal: NUNCA se apilan sobre un día ya auditado por el
+      // dashboard (isAuditedDate) — ese resumen ya reemplazó calls[dISO] por
+      // completo arriba, vía importRowsToEntries/mergeImportedDay. Para los
+      // días sin auditar, se fusiona por IDENTIDAD (fecha+hora de inicio) y
+      // jerarquía de fuente, no por id — así una misma llamada recapturada
+      // varias veces actualiza el mismo registro en vez de duplicarlo.
+      var remoteCallsForMerge = remoteCalls.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+      upsertCallsByIdentity(calls, remoteCallsForMerge);
       // ── Deduplicar entradas remotas por fecha ─────────────────────────────
       // El backend puede tener múltiples entradas por día (entradas canónicas
       // imp_YYYY-MM-DD mezcladas con restos de importaciones previas que tenían
@@ -3018,6 +3134,10 @@
     syncNow(true);
   });
 
+  document.getElementById('btnSyncNowHome').addEventListener('click', function(){
+    syncNow(true);
+  });
+
   document.getElementById('btnFetchRate').addEventListener('click', function(){
     updateExchangeRateAuto(document.getElementById('rateStatus'), true);
   });
@@ -3085,7 +3205,7 @@
         //    Prioridad máxima — reemplaza cualquier registro previo para esas fechas.
         var historyItems = data.history || [];
         if(Array.isArray(historyItems) && historyItems.length>0){
-          var histResult = importRowsToEntries(historyItems);
+          var histResult = importRowsToEntries(historyItems, 'dashboard-json');
           saveEntries(); saveCalls();
           parts.push(histResult.days+' día(s) de histórico ('+histResult.rows+' fila(s))');
         }
@@ -3093,15 +3213,14 @@
         // 2) "calls": llamadas del portal en vivo (ciclo en curso).
         //    Se omiten las que ya están cubiertas por el histórico auditado —
         //    evita apilar minutos individuales encima del resumen importado.
+        //    Se fusionan por IDENTIDAD (fecha+hora), no por id, para que una
+        //    misma llamada recapturada en otra sesión actualice el mismo
+        //    registro en vez de agregarse como fila nueva.
         var callItems = data.calls || [];
         if(Array.isArray(callItems) && callItems.length>0){
           var liveCalls = callItems.filter(function(r){ return r.date && !isAuditedDate(r.date); });
           var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
-          mergeById(calls, liveCalls, function(r){
-            var hour = r.callStart ? parseHour12(r.callStart) : null;
-            var segment = hour!=null ? segmentOfHour(hour) : null;
-            return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||'portal-auto'};
-          });
+          upsertCallsByIdentity(calls, liveCalls.map(function(r){ return Object.assign({}, r, {source: r.source||'portal-json'}); }));
           var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
           saveCalls();
           mergeById(entries, liveCalls, function(r){
@@ -3163,11 +3282,11 @@
      dato digitado manualmente: el registro manual solo existe como estimado previo
      a la auditoría, así que al importar se reemplaza por completo el día, sin
      mezclar ni conservar entradas manuales anteriores. */
-  function mergeImportedDay(dISO, min, usd, count, callList){
+  function mergeImportedDay(dISO, min, usd, count, callList, source){
     var nota = 'Importado de hoja de cálculo — auditado ('+count+' fila'+(count===1?'':'s')+')';
     entries[dISO] = [{
       id:'imp_'+dISO,
-      min:round2(min), usd:round2(usd), nota:nota
+      min:round2(min), usd:round2(usd), nota:nota, source: source||'dashboard-json'
     }];
     // El detalle por llamada también se reemplaza por completo para ese día (mismo criterio
     // que las entradas agregadas: lo importado/auditado manda sobre cualquier carga previa).
@@ -3185,7 +3304,8 @@
     if(s==='') return NaN;
     return parseFloat(s);
   }
-  function importRowsToEntries(rows){
+  function importRowsToEntries(rows, source){
+    source = source || 'dashboard-json'; // por defecto: JSON/hoja de cálculo del dashboard; pullFromServer pasa 'dashboard-backend'
     if(!rows || rows.length===0) return {days:0, rows:0};
     var keys = Object.keys(rows[0]);
     var dateKey = findKey(keys, DATE_ALIASES);
@@ -3220,7 +3340,7 @@
       byDay[dISO].count += 1;
       /* ID determinístico: usa Project ID como clave para que el backend haga
          upsert en lugar de insertar duplicados en cada importación. */
-      byDay[dISO].calls.push({id: pid ? 'hist_'+pid : 'hist_'+dISO+'_'+rowsUsed, min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:'import'});
+      byDay[dISO].calls.push({id: pid ? 'hist_'+pid : 'hist_'+dISO+'_'+rowsUsed, min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:source});
       rowsUsed++;
       if(agentKey){
         var aid = String(row[agentKey]||'').trim();
@@ -3229,7 +3349,7 @@
     });
     var days = Object.keys(byDay);
     days.forEach(function(dISO){
-      mergeImportedDay(dISO, byDay[dISO].min, byDay[dISO].usd, byDay[dISO].count, byDay[dISO].calls);
+      mergeImportedDay(dISO, byDay[dISO].min, byDay[dISO].usd, byDay[dISO].count, byDay[dISO].calls, source);
     });
     // Agent ID: se toma el más frecuente en el archivo importado.
     var bestAgent = null, bestCount = 0;
