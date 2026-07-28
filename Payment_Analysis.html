@@ -1407,10 +1407,19 @@
     if(!syncConfigured()) return Promise.resolve(false);
     return Promise.all([
       syncFetch('/entries').then(function(r){ return r.ok ? r.json() : {entries:[]}; }),
-      syncFetch('/calls').then(function(r){ return r.ok ? r.json() : {calls:[]}; })
+      syncFetch('/calls').then(function(r){ return r.ok ? r.json() : {calls:[]}; }),
+      syncFetch('/history').then(function(r){ return r.ok ? r.json() : {history:[]}; })
     ]).then(function(results){
       var remoteEntries = results[0].entries || [];
-      var remoteCalls = results[1].calls || [];
+      var remoteCalls   = results[1].calls   || [];
+      var remoteHistory = results[2].history || [];
+
+      // Si el backend tiene histórico auditado, procesarlo primero (prioridad máxima).
+      // Esto permite que el histórico capturado por la extensión aparezca en la app
+      // sin que el usuario tenga que importar el JSON manualmente.
+      if(remoteHistory.length > 0){
+        try{ importRowsToEntries(remoteHistory); } catch(e){ console.warn('[Bitácora] Error procesando histórico del backend:', e); }
+      }
       mergeById(entries, remoteEntries, function(r){
         return {id:r.id, min:r.min, usd:r.usd, nota:r.nota||''};
       });
@@ -1419,11 +1428,38 @@
         var segment = hour!=null ? segmentOfHour(hour) : null;
         return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||''};
       });
+      // ── Deduplicar entradas remotas por fecha ─────────────────────────────
+      // El backend puede tener múltiples entradas por día (entradas canónicas
+      // imp_YYYY-MM-DD mezcladas con restos de importaciones previas que tenían
+      // sufijo aleatorio, e incluso llamadas individuales con IDs hex de 12 chars).
+      // Regla de prioridad:
+      //   1. Si existe imp_YYYY-MM-DD (canónica)  → usar SOLO esa para la fecha.
+      //   2. Si no hay canónica pero hay imp_DATE_RANDOM (viejo formato) → usar solo la primera.
+      //   3. Sin ningún imp_* (fecha de hoy sin importar) → usar todas.
+      var byDateBuckets = {};
+      remoteEntries.forEach(function(r){
+        if(!r || !r.id || !r.date) return;
+        var b = byDateBuckets[r.date] || (byDateBuckets[r.date] = {canonical:null, impOld:null, rest:[]});
+        if(r.id === 'imp_'+r.date)                           b.canonical = r;
+        else if(r.id.indexOf('imp_'+r.date+'_') === 0)      b.impOld = b.impOld || r;
+        else                                                  b.rest.push(r);
+      });
+      var cleanRemoteEntries = [];
+      Object.keys(byDateBuckets).forEach(function(d){
+        var b = byDateBuckets[d];
+        if(b.canonical)      cleanRemoteEntries.push(b.canonical);
+        else if(b.impOld)    cleanRemoteEntries.push(b.impOld);   // solo 1 por fecha
+        else                 b.rest.forEach(function(r){ cleanRemoteEntries.push(r); });
+      });
+      mergeById(entries, cleanRemoteEntries, function(r){
+        return {id:r.id, min:r.min, usd:r.usd||0, nota:r.nota||''};
+      });
+
       // El contador de "Hoy" se calcula desde `entries`, no desde `calls` —
       // sin esto, una llamada traída del backend no sube el minutero principal.
-      // IMPORTANTE: solo agregar a entries las llamadas cuya fecha NO está ya
-      // cubierta por un registro auditado (imp_*) — de lo contrario el pull
-      // apila los minutos individuales encima del resumen auditado y multiplica.
+      // Solo agregar llamadas a entries para fechas NO cubiertas por un registro
+      // auditado — de lo contrario los minutos individuales se apilan encima del
+      // resumen y multiplican el total.
       var callsForEntries = remoteCalls.filter(function(r){ return r.date && !isAuditedDate(r.date); });
       mergeById(entries, callsForEntries, function(r){
         return {id:r.id, min:r.min, nota:'Sincronizado del backend'+(r.callStart?' · '+r.callStart:'')};
@@ -3042,11 +3078,11 @@
         var data = JSON.parse(ev.target.result);
         var parts = [];
 
-        // ORDEN CORRECTO: histórico primero para que isAuditedDate sea preciso
-        // cuando filtremos las llamadas en vivo.
+        // ORDEN: histórico primero → así isAuditedDate es exacto cuando
+        // filtramos las llamadas en vivo del portal.
 
-        // 1) "history": histórico auditado de Propio Analytics. Prioridad máxima:
-        //    reemplaza cualquier registro previo de esas fechas.
+        // 1) "history": histórico auditado de Propio Analytics.
+        //    Prioridad máxima — reemplaza cualquier registro previo para esas fechas.
         var historyItems = data.history || [];
         if(Array.isArray(historyItems) && historyItems.length>0){
           var histResult = importRowsToEntries(historyItems);
@@ -3054,31 +3090,24 @@
           parts.push(histResult.days+' día(s) de histórico ('+histResult.rows+' fila(s))');
         }
 
-        // 2) "calls": llamadas del ciclo en curso capturadas por la extensión
-        //    (Call Date / Call Start / Duration). Solo se agregan si la fecha
-        //    NO está ya cubierta por el histórico auditado — así evitamos apilar
-        //    llamadas individuales encima del resumen del histórico.
+        // 2) "calls": llamadas del portal en vivo (ciclo en curso).
+        //    Se omiten las que ya están cubiertas por el histórico auditado —
+        //    evita apilar minutos individuales encima del resumen importado.
         var callItems = data.calls || [];
         if(Array.isArray(callItems) && callItems.length>0){
-          // Filtrar: descartar fechas que ya tienen entrada auditada (imp_*)
-          var liveCallItems = callItems.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+          var liveCalls = callItems.filter(function(r){ return r.date && !isAuditedDate(r.date); });
           var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
-          mergeById(calls, liveCallItems, function(r){
+          mergeById(calls, liveCalls, function(r){
             var hour = r.callStart ? parseHour12(r.callStart) : null;
             var segment = hour!=null ? segmentOfHour(hour) : null;
             return {id:r.id, min:r.min, start:r.callStart||'', hour:hour, segment:segment, source:r.source||'portal-auto'};
           });
           var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
           saveCalls();
-
-          // El contador de "Hoy" (y los totales del ciclo) se calculan a partir
-          // de `entries`, no de `calls` — sin esto, una llamada importada aparece
-          // en el detalle pero nunca sube el minutero principal.
-          mergeById(entries, liveCallItems, function(r){
+          mergeById(entries, liveCalls, function(r){
             return {id:r.id, min:r.min, nota:'Capturado por extensión'+(r.callStart?' · '+r.callStart:'')};
           });
           saveEntries();
-
           var newLive = after - before;
           if(newLive > 0) parts.push(newLive+' llamada(s) nueva(s) en vivo');
         }
@@ -3144,9 +3173,9 @@
     // que las entradas agregadas: lo importado/auditado manda sobre cualquier carga previa).
     calls[dISO] = callList;
   }
-  /* Devuelve true si el día ya tiene una entrada auditada (importada del histórico).
-     Se usa para evitar que pullFromServer o el importador de la extensión apile
-     llamadas individuales encima del resumen auditado, duplicando los minutos. */
+  /* isAuditedDate — devuelve true si el día tiene una entrada auditada (id: imp_YYYY-MM-DD).
+     Usada por pullFromServer y fileImportExt para no apilar llamadas individuales
+     encima del resumen auditado y duplicar los minutos. */
   function isAuditedDate(dISO){
     return (entries[dISO]||[]).some(function(e){ return e.id && e.id.indexOf('imp_')===0; });
   }
@@ -3189,8 +3218,8 @@
       byDay[dISO].min += min;
       byDay[dISO].usd += usd;
       byDay[dISO].count += 1;
-      /* ID determinístico: usa Project ID del histórico para que el mismo registro
-         siempre tenga el mismo id y el backend haga upsert en vez de insertar duplicados. */
+      /* ID determinístico: usa Project ID como clave para que el backend haga
+         upsert en lugar de insertar duplicados en cada importación. */
       byDay[dISO].calls.push({id: pid ? 'hist_'+pid : 'hist_'+dISO+'_'+rowsUsed, min:round2(min), usd:round2(usd), adj:round2(adj), line:line, hour:hour, segment:segment, start:startRaw, source:'import'});
       rowsUsed++;
       if(agentKey){
