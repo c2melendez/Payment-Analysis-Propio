@@ -1128,8 +1128,10 @@
       </div>
       <div class="modal-actions" style="justify-content:flex-start;">
         <label class="btn ghost sm" style="cursor:pointer;">Importar JSON de extensión (fusionar)<input type="file" id="fileImportExt" accept="application/json" style="display:none;"></label>
+        <button class="btn ghost sm" id="btnBridgeSync" title="Sincroniza directamente desde la extensión instalada en este Chrome">⟳ Sincronizar con extensión</button>
       </div>
       <div class="rate-status" id="extImportStatus" style="display:none;"></div>
+      <div class="rate-status" id="bridgeSyncStatus" style="display:none;"></div>
     </div>
     <div class="modal-scroll-btns">
       <button type="button" class="modal-scroll-btn" id="modalScrollUp" title="Subir">▲</button>
@@ -1630,6 +1632,64 @@
 
   // Si se quedó un push pendiente de una sesión anterior sin conexión, reintenta al cargar.
   window.addEventListener('online', function(){ if(hasSyncPending()) pushAllToServer(); });
+
+  /* ── Content Script Bridge ──────────────────────────────────────────────
+   * Recibe datos de content-bridge.js (extensión de Chrome) via postMessage.
+   * Mismo flujo que fileImportExt: historial primero, llamadas en vivo después,
+   * respetando isAuditedDate para no apilar minutos sobre días ya auditados.
+   * ─────────────────────────────────────────────────────────────────────── */
+  window.addEventListener('message', function(ev) {
+    if (!ev.data || ev.data.type !== 'BITACORA_BRIDGE_SYNC' || ev.data.source !== 'bitacora-ext') return;
+    if (ev.origin !== window.location.origin) return;
+
+    var statusEl = document.getElementById('bridgeSyncStatus');
+    statusEl.style.display = 'block';
+
+    try {
+      var data = ev.data;
+      var parts = [];
+
+      // 1) Histórico auditado primero — establece isAuditedDate correctamente
+      var historyItems = data.history || [];
+      if (Array.isArray(historyItems) && historyItems.length > 0) {
+        var histResult = importRowsToEntries(historyItems, 'dashboard-json');
+        saveEntries(); saveCalls();
+        parts.push(histResult.days + ' día(s) de histórico (' + histResult.rows + ' fila(s))');
+      }
+
+      // 2) Llamadas en vivo del portal — solo días que no están auditados
+      var callItems = data.calls || [];
+      if (Array.isArray(callItems) && callItems.length > 0) {
+        var liveCalls = callItems.filter(function(r) { return r.date && !isAuditedDate(r.date); });
+        if (liveCalls.length > 0) {
+          var before = Object.keys(calls).reduce(function(n, d) { return n + (calls[d] || []).length; }, 0);
+          upsertCallsByIdentity(calls, liveCalls.map(function(r) {
+            return Object.assign({}, r, { source: r.source || 'portal-json' });
+          }));
+          var after = Object.keys(calls).reduce(function(n, d) { return n + (calls[d] || []).length; }, 0);
+          saveCalls();
+          mergeById(entries, liveCalls, function(r) {
+            return { id: r.id, min: r.min, nota: 'Capturado por extensión' + (r.callStart ? ' · ' + r.callStart : '') };
+          });
+          saveEntries();
+          var newLive = after - before;
+          if (newLive > 0) parts.push(newLive + ' llamada(s) nueva(s) en vivo');
+        }
+      }
+
+      if (parts.length > 0) {
+        renderAll();
+        var now = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+        statusEl.textContent = '✓ Sincronizado ' + now + ' · ' + parts.join(' · ');
+      } else {
+        var nowEmpty = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+        statusEl.textContent = '— ' + nowEmpty + ' · Sin cambios nuevos';
+      }
+    } catch (err) {
+      statusEl.textContent = 'Error en sincronización con extensión.';
+      logError('bridge:message', err);
+    }
+  });
 
   /* ---------- Modo Claro / Modo Oscuro ----------
      El <head> ya aplicó la clase 'theme-light' antes de pintar (ver script inline
@@ -3160,6 +3220,29 @@
     })));
     location.reload();
   });
+  document.getElementById('btnBridgeSync').addEventListener('click', function() {
+    var statusEl = document.getElementById('bridgeSyncStatus');
+    statusEl.style.display = 'block';
+    statusEl.textContent = '…Solicitando datos a la extensión';
+    /* Pide a content-bridge.js que empuje los datos ahora mismo.
+       Si la extensión no está instalada, el postMessage no tiene receptor
+       y el mensaje simplemente no llega — sin error visible al usuario. */
+    window.postMessage({ type: 'BITACORA_REQUEST_SYNC' }, window.location.origin);
+    /* Feedback de timeout si la extensión no responde en 3 s */
+    var tid = setTimeout(function() {
+      if (statusEl.textContent.indexOf('…') === 0) {
+        statusEl.textContent = 'La extensión no respondió — ¿está instalada y habilitada en este Chrome?';
+      }
+    }, 3000);
+    /* Limpiar el timeout si la respuesta llega antes */
+    window.addEventListener('message', function clear(ev) {
+      if (ev.data && ev.data.type === 'BITACORA_BRIDGE_SYNC') {
+        clearTimeout(tid);
+        window.removeEventListener('message', clear);
+      }
+    });
+  });
+
   document.getElementById('btnExport').addEventListener('click', function(){
     var blob = new Blob([JSON.stringify({cfg:cfg, entries:entries, calls:calls}, null, 2)], {type:'application/json'});
     var a = document.createElement('a');
