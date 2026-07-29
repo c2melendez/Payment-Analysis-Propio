@@ -883,7 +883,8 @@
             <button class="btn" id="btnAdd">+ Agregar</button>
           </div>
 
-          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+            <button class="btn ghost sm" id="btnPullHoy" title="Traer datos desde Supabase ahora">⟳ Actualizar</button>
             <button class="btn ghost sm" id="btnClearToday" style="border-color:#5a3229;color:var(--red);">🗑 Limpiar todo hoy</button>
           </div>
 
@@ -3146,6 +3147,23 @@
   });
   document.getElementById('inMin').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('btnAdd').click(); });
   document.getElementById('inNota').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('btnAdd').click(); });
+
+  document.getElementById('btnPullHoy').addEventListener('click', function() {
+    pullFromSupabase(null);
+  });
+
+  /* Auto-pull sin polling: se dispara cuando el usuario vuelve a esta pestaña
+     (p. ej. venía del portal de Propio). Costo cero mientras la pestaña está activa.
+     Mínimo de 30 s entre pulls para no saturar si se alterna rápido entre pestañas. */
+  var _lastVisibilityPull = 0;
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+    if (!cfg.supabase || !cfg.supabase.url || !cfg.supabase.anonKey) return;
+    var now = Date.now();
+    if (now - _lastVisibilityPull < 30000) return;
+    _lastVisibilityPull = now;
+    pullFromSupabase(null);
+  });
 
   document.getElementById('btnClearToday').addEventListener('click', function(){
     var dISO = iso(todayDate());
