@@ -826,7 +826,6 @@
   </div>
   <div class="top-right">
     <div class="clock" id="clockBox">&nbsp;</div>
-    <button class="btn ghost sm" id="btnSyncNowHome" title="Traer la última data del backend (portal + dashboard auditado)">↻ Sincronizar</button>
     <button class="gear" id="btnSettings" title="Ajustes">⚙</button>
   </div>
 </header>
@@ -3227,10 +3226,6 @@
     cfg.sync.serverUrl = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
     cfg.sync.token = document.getElementById('cfgSyncToken').value.trim();
     saveCfg();
-    syncNow(true);
-  });
-
-  document.getElementById('btnSyncNowHome').addEventListener('click', function(){
     syncNow(true);
   });
 
