@@ -4102,13 +4102,34 @@
   /* ---------- Widget: Traductor (req. 2) ---------- */
   (function initTranslatorWidget(){
     var trDir = 'es-en';
+    /* Referencias cacheadas una sola vez: tras un pop-out, estos nodos se trasladan
+       (con appendChild) al document de la ventana emergente y dejan de existir en el
+       document principal. Volver a buscarlos con document.getElementById(...) en cada
+       uso — como hacía antes este widget — encontraba null en cuanto el widget estaba
+       desprendido, y rompía el traductor (nada pasaba al escribir, traducir o copiar). */
+    var textEl = document.getElementById('trText');
+    var trCopyBtn = document.getElementById('trCopy');
     var dirEsEn = document.getElementById('trDirEsEn');
     var dirEnEs = document.getElementById('trDirEnEs');
     dirEsEn.addEventListener('click', function(){ trDir='es-en'; dirEsEn.classList.add('active'); dirEnEs.classList.remove('active'); });
     dirEnEs.addEventListener('click', function(){ trDir='en-es'; dirEnEs.classList.add('active'); dirEsEn.classList.remove('active'); });
 
+    /* En modo pop-out, los elementos del widget (trText, botones, etc.) viven en el
+       document de la ventana emergente, pero este script sigue corriendo en el realm
+       de la ventana principal. navigator.clipboard.writeText() y window.open() están
+       ligados al foco/activación del document que los invoca: si se llama sobre la
+       ventana principal mientras el foco (y el gesto de clic del usuario) está en la
+       ventana emergente, el navegador los rechaza en silencio (clipboard falla, y
+       window.open puede ser bloqueado como pop-up no solicitado). Por eso resolvemos
+       la ventana "dueña" real a partir del document actual de los elementos del widget
+       (outputEl.ownerDocument), que cambia automáticamente al hacer pop-out/restore. */
+    function ownerWin(){
+      return (outputEl && outputEl.ownerDocument && outputEl.ownerDocument.defaultView) || window;
+    }
+
     function copyToClipboard(text){
-      try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text); }catch(e){}
+      var w = ownerWin();
+      try{ if(w.navigator.clipboard && w.navigator.clipboard.writeText) w.navigator.clipboard.writeText(text); }catch(e){}
     }
 
     /* --- Traducción dentro de la app (sin salir del navegador), vía MyMemory ---
@@ -4134,7 +4155,7 @@
     }
 
     function runTranslate(){
-      var text = document.getElementById('trText').value.trim();
+      var text = textEl.value.trim();
       if(!text){
         outputEl.value = '';
         copyOutputBtn.style.display = 'none';
@@ -4166,13 +4187,13 @@
     }
 
     translateNowBtn.addEventListener('click', runTranslate);
-    document.getElementById('trText').addEventListener('input', function(){
+    textEl.addEventListener('input', function(){
       if(!autoToggle.checked) return;
       clearTimeout(autoTimer);
       autoTimer = setTimeout(runTranslate, 700);
     });
-    dirEsEn.addEventListener('click', function(){ if(document.getElementById('trText').value.trim()) runTranslate(); });
-    dirEnEs.addEventListener('click', function(){ if(document.getElementById('trText').value.trim()) runTranslate(); });
+    dirEsEn.addEventListener('click', function(){ if(textEl.value.trim()) runTranslate(); });
+    dirEnEs.addEventListener('click', function(){ if(textEl.value.trim()) runTranslate(); });
     copyOutputBtn.addEventListener('click', function(){
       copyToClipboard(outputEl.value);
       var orig = copyOutputBtn.textContent;
@@ -4198,21 +4219,20 @@
       b.className = 'btn ghost sm tr-provider-btn';
       b.textContent = p.name;
       b.addEventListener('click', function(){
-        var text = document.getElementById('trText').value.trim();
+        var text = textEl.value.trim();
         if(text) copyToClipboard(text);
-        window.open(p.build(text, trDir), '_blank', 'noopener');
+        ownerWin().open(p.build(text, trDir), '_blank', 'noopener');
       });
       box.appendChild(b);
     });
 
-    document.getElementById('trCopy').addEventListener('click', function(){
-      var text = document.getElementById('trText').value.trim();
+    trCopyBtn.addEventListener('click', function(){
+      var text = textEl.value.trim();
       if(!text) return;
       copyToClipboard(text);
-      var btn = document.getElementById('trCopy');
-      var orig = btn.textContent;
-      btn.textContent = '✓ Copiado';
-      setTimeout(function(){ btn.textContent = orig; }, 1200);
+      var orig = trCopyBtn.textContent;
+      trCopyBtn.textContent = '✓ Copiado';
+      setTimeout(function(){ trCopyBtn.textContent = orig; }, 1200);
     });
 
     /* Minimizar/expandir de este widget se maneja de forma centralizada en initWidgetChrome. */
