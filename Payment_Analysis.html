@@ -1113,7 +1113,24 @@
       </div>
 
       <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
-        <label>Restablecer aplicación</label>
+        <label>Supabase — lectura cross-device</label>
+        <div class="rate-status">La extensión escribe los datos; la app web solo los lee. Obtén la <strong>anon key</strong> en Supabase Dashboard → Settings → API.</div>
+      </div>
+      <div class="field">
+        <label>URL del proyecto</label>
+        <input type="text" id="cfgSupabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Anon Key</label>
+        <input type="password" id="cfgSupabaseAnonKey" placeholder="eyJ… (anon / public)" autocomplete="new-password">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <button class="btn ghost sm" id="btnSupabaseTest">Probar conexión</button>
+        <button class="btn ghost sm" id="btnSupabasePull">↓ Traer datos ahora</button>
+      </div>
+      <div class="rate-status" id="supabaseStatus" style="display:none;"></div>
+
+      <div class="field" style="border-top:1px solid var(--line);padding-top:14px;">
         <button class="btn ghost sm" id="btnReset" style="border-color:#5a3229;color:var(--red);">↺ Restablecer a valores por defecto</button>
         <div class="rate-status">Borra todo el histórico y restaura: meta diaria 480 min, meta de ciclo $570, tarifa $0.12/min, título "Payment Analysis Propio", barra lineal, y la posición/tamaño de los widgets. No se puede deshacer.</div>
       </div>
@@ -1224,6 +1241,13 @@
       token: '',
       lastSyncAt: null,
       lastSyncOk: null
+    },
+    // ---- Sincronización cross-device con Supabase ----
+    supabase: {
+      url: '',
+      anonKey: '',
+      lastPullAt: null,
+      lastPullOk: null
     }
   };
   var ANCHOR = new Date('2026-05-30T00:00:00'); // sábado de referencia (inicio de ciclo confirmado)
@@ -1242,7 +1266,8 @@
     });
   })();
   (function ensureSyncDefaults(){
-    cfg.sync = Object.assign({}, DEFAULTS.sync, cfg.sync||{});
+    cfg.sync     = Object.assign({}, DEFAULTS.sync,     cfg.sync     || {});
+    cfg.supabase = Object.assign({}, DEFAULTS.supabase, cfg.supabase || {});
   })();
   var entries = loadJSON('bitacora_entries', {}); // { 'YYYY-MM-DD': [{id,min,nota,usd?}, ...] }
   /* Detalle por llamada (solo se llena al importar hoja de cálculo). Se usa para los
@@ -1632,99 +1657,143 @@
   // Si se quedó un push pendiente de una sesión anterior sin conexión, reintenta al cargar.
   window.addEventListener('online', function(){ if(hasSyncPending()) pushAllToServer(); });
 
+  /* ── processExtensionData ─────────────────────────────────────────────────
+   * Función compartida entre el Content Script Bridge y pullFromSupabase.
+   * Recibe historyItems (formato importRowsToEntries) y callItems (portal),
+   * los fusiona en entries/calls con dedup a nivel de llamada individual
+   * y devuelve los mensajes de resumen para mostrar en el statusEl dado.
+   * ─────────────────────────────────────────────────────────────────────── */
+  function processExtensionData(historyItems, callItems, statusEl) {
+    var parts = [];
+
+    // 1) Histórico analytics primero — llena calls[dISO] con filas individuales
+    //    y entries[dISO] con el agregado imp_YYYY-MM-DD.
+    if (Array.isArray(historyItems) && historyItems.length > 0) {
+      var histResult = importRowsToEntries(historyItems, 'dashboard-json');
+      saveEntries(); saveCalls();
+      parts.push(histResult.days + ' día(s) de histórico (' + histResult.rows + ' fila(s))');
+    }
+
+    // 2) Llamadas del portal — dedup a nivel de llamada individual, no de día.
+    //    upsertCallsByIdentity usa callIdentityKey(fecha+hora) y SOURCE_PRIORITY:
+    //    portal-json (2) pierde contra dashboard-json (4) — misma llamada → se descarta.
+    var portalCalls = (callItems || []).filter(function(r) { return r.date && r.id; })
+      .map(function(r) { return Object.assign({}, r, { source: r.source || 'portal-json' }); });
+
+    if (portalCalls.length > 0) {
+      // Snapshot de IDs presentes ANTES del upsert
+      var idsBefore = {};
+      Object.keys(calls).forEach(function(d) {
+        (calls[d] || []).forEach(function(c) { if (c && c.id) idsBefore[c.id] = true; });
+      });
+
+      upsertCallsByIdentity(calls, portalCalls);
+
+      // Solo las que realmente se añadieron (no descartadas por analytics)
+      var addedCalls = portalCalls.filter(function(r) {
+        if (idsBefore[r.id]) return false;
+        return (calls[r.date] || []).some(function(c) { return c && c.id === r.id; });
+      });
+
+      if (addedCalls.length > 0) {
+        saveCalls();
+        mergeById(entries, addedCalls, function(r) {
+          return {
+            id  : r.id,
+            min : r.min,
+            nota: 'Portal (no auditado)' + (r.callStart ? ' · ' + r.callStart : ''),
+          };
+        });
+        saveEntries();
+        parts.push(addedCalls.length + ' llamada(s) nueva(s) del portal');
+      }
+    }
+
+    if (parts.length > 0) {
+      renderAll();
+      var ts = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '✓ ' + ts + ' · ' + parts.join(' · '); }
+    } else {
+      var ts2 = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '— ' + ts2 + ' · Sin cambios nuevos'; }
+    }
+    return parts;
+  }
+
   /* ── Content Script Bridge ──────────────────────────────────────────────
-   * Recibe datos de content-bridge.js (extensión de Chrome) via postMessage.
-   *
-   * Prioridad de fuentes (definida en SOURCE_PRIORITY):
-   *   portal-json (2) < dashboard-json (4)
-   *
-   * Flujo:
-   *   1) Histórico analytics → importRowsToEntries (agrega por día, imp_YYYY-MM-DD)
-   *   2) Llamadas del portal → upsertCallsByIdentity SIN pre-filtro por día:
-   *      - Si la llamada tiene el mismo callIdentityKey (fecha+hora) que una de
-   *        analytics → se descarta (analytics tiene prioridad).
-   *      - Si NO tiene coincidencia → se añade, aunque el día esté "auditado".
-   *   3) Solo las llamadas que upsertCallsByIdentity REALMENTE añadió
-   *      (confirmado por comparación antes/después) van a mergeById en entries.
-   *      Esto evita doble conteo: las llamadas ya cubiertas por imp_YYYY-MM-DD
-   *      nunca llegan a mergeById.
+   * Recibe datos de content-bridge.js (extensión instalada en este Chrome).
+   * Prioridad: portal-json (2) < dashboard-json (4) → upsertCallsByIdentity.
    * ─────────────────────────────────────────────────────────────────────── */
   window.addEventListener('message', function(ev) {
     if (!ev.data || ev.data.type !== 'BITACORA_BRIDGE_SYNC' || ev.data.source !== 'bitacora-ext') return;
     if (ev.origin !== window.location.origin) return;
-
     var statusEl = document.getElementById('bridgeSyncStatus');
-    statusEl.style.display = 'block';
-
     try {
-      var data = ev.data;
-      var parts = [];
-
-      // 1) Histórico analytics primero — llena calls[dISO] con filas individuales
-      //    y entries[dISO] con el agregado imp_YYYY-MM-DD.
-      var historyItems = data.history || [];
-      if (Array.isArray(historyItems) && historyItems.length > 0) {
-        var histResult = importRowsToEntries(historyItems, 'dashboard-json');
-        saveEntries(); saveCalls();
-        parts.push(histResult.days + ' día(s) de histórico (' + histResult.rows + ' fila(s))');
-      }
-
-      // 2) Llamadas del portal — dedup a nivel de llamada individual, no de día.
-      //    Se pasan TODAS (incluyendo fechas auditadas); upsertCallsByIdentity
-      //    usa callIdentityKey(fecha+hora) y SOURCE_PRIORITY para descartar
-      //    duplicados respecto a las filas de analytics ya cargadas en calls[].
-      var callItems = data.calls || [];
-      var portalCalls = callItems.filter(function(r) { return r.date && r.id; })
-        .map(function(r) { return Object.assign({}, r, { source: r.source || 'portal-json' }); });
-
-      if (portalCalls.length > 0) {
-        // Snapshot de IDs presentes en calls[] ANTES de upsert
-        var idsBefore = {};
-        Object.keys(calls).forEach(function(d) {
-          (calls[d] || []).forEach(function(c) { if (c && c.id) idsBefore[c.id] = true; });
-        });
-
-        upsertCallsByIdentity(calls, portalCalls);
-
-        // Determinar qué llamadas del portal fueron REALMENTE añadidas
-        // (no descartadas por tener la misma identidad que una de analytics)
-        var addedCalls = portalCalls.filter(function(r) {
-          if (idsBefore[r.id]) return false;                          // ya existía antes
-          var dayCalls = calls[r.date] || [];
-          return dayCalls.some(function(c) { return c && c.id === r.id; }); // está ahora
-        });
-
-        if (addedCalls.length > 0) {
-          saveCalls();
-          // Actualizar entries SOLO para las llamadas realmente nuevas:
-          //   - Día NO auditado → mergeById añade la entrada individual.
-          //   - Día auditado pero llamada sin cobertura analytics → también se añade
-          //     como entrada suplementaria (no duplica el imp_ aggregate).
-          mergeById(entries, addedCalls, function(r) {
-            return {
-              id  : r.id,
-              min : r.min,
-              nota: 'Portal (no auditado)' + (r.callStart ? ' · ' + r.callStart : ''),
-            };
-          });
-          saveEntries();
-          parts.push(addedCalls.length + ' llamada(s) nueva(s) del portal');
-        }
-      }
-
-      if (parts.length > 0) {
-        renderAll();
-        var now = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = '✓ Sincronizado ' + now + ' · ' + parts.join(' · ');
-      } else {
-        var nowEmpty = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = '— ' + nowEmpty + ' · Sin cambios nuevos';
-      }
+      processExtensionData(ev.data.history || [], ev.data.calls || [], statusEl);
     } catch (err) {
-      statusEl.textContent = 'Error en sincronización con extensión.';
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Error en sincronización con extensión.'; }
       logError('bridge:message', err);
     }
   });
+
+  /* ── Supabase pull ──────────────────────────────────────────────────────
+   * Lee las tablas `calls` e `history` de Supabase con la anon key y
+   * las fusiona usando processExtensionData (misma lógica que el bridge).
+   * ─────────────────────────────────────────────────────────────────────── */
+  async function pullFromSupabase(statusEl) {
+    var sbUrl = ((cfg.supabase && cfg.supabase.url) || '').replace(/\/+$/, '');
+    var sbKey = (cfg.supabase && cfg.supabase.anonKey) || '';
+    if (!sbUrl || !sbKey) {
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Configura la URL y la Anon Key de Supabase en Ajustes primero.'; }
+      return;
+    }
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '…Descargando datos de Supabase'; }
+    try {
+      var headers = { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey };
+      var results = await Promise.all([
+        fetch(sbUrl + '/rest/v1/history?select=*', { headers: headers }),
+        fetch(sbUrl + '/rest/v1/calls?select=*',   { headers: headers }),
+      ]);
+      if (!results[0].ok || !results[1].ok) {
+        throw new Error('HTTP ' + (results[0].ok ? results[1].status : results[0].status));
+      }
+      var sbHistory = await results[0].json();
+      var sbCalls   = await results[1].json();
+
+      // Mapear snake_case de Supabase → formato de importRowsToEntries
+      var historyItems = sbHistory.map(function(r) {
+        return {
+          'Project ID'        : r.project_id,
+          'Payment Status'    : r.payment_status   || '',
+          'Pay Cycle'         : r.pay_cycle         || '',
+          'Comments'          : r.comments          || '',
+          'Adjustment'        : String(r.adjustment  || 0),
+          'Earnings'          : String(r.earnings    || 0),
+          'Rate'              : String(r.rate        || 0),
+          'Quantity'          : String(r.quantity    || 0),
+          'Language'          : r.language          || '',
+          'End Time (Central)': r.end_time          || '',
+          'Start Time (Central)': r.start_time      || '',
+          'Service Date'      : r.service_date      || '',
+          'Service Line'      : r.service_line      || '',
+          'Agent ID'          : r.agent_id          || '',
+        };
+      });
+      var callItems = sbCalls.map(function(r) {
+        return { id: r.id, date: r.date, min: Number(r.min || 0), callStart: r.call_start || '', source: r.source || 'portal-json' };
+      });
+
+      cfg.supabase.lastPullAt = Date.now();
+      cfg.supabase.lastPullOk = true;
+      saveCfg();
+      processExtensionData(historyItems, callItems, statusEl);
+    } catch (err) {
+      cfg.supabase.lastPullOk = false;
+      saveCfg();
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Error al conectar con Supabase: ' + (err.message || err); }
+      logError('supabase:pull', err);
+    }
+  }
 
   /* ---------- Modo Claro / Modo Oscuro ----------
      El <head> ya aplicó la clase 'theme-light' antes de pintar (ver script inline
@@ -3123,6 +3192,16 @@
     document.getElementById('cfgSyncEnabled').checked = !!cfg.sync.enabled;
     document.getElementById('cfgSyncUrl').value = cfg.sync.serverUrl || '';
     document.getElementById('cfgSyncToken').value = cfg.sync.token || '';
+    document.getElementById('cfgSupabaseUrl').value = (cfg.supabase && cfg.supabase.url) || '';
+    document.getElementById('cfgSupabaseAnonKey').value = (cfg.supabase && cfg.supabase.anonKey) || '';
+    var sbStatusEl = document.getElementById('supabaseStatus');
+    if (cfg.supabase && cfg.supabase.lastPullAt) {
+      sbStatusEl.style.display = 'block';
+      sbStatusEl.textContent = (cfg.supabase.lastPullOk ? '✓' : '✗') +
+        ' Último pull: ' + fmtUpdated(new Date(cfg.supabase.lastPullAt).toISOString());
+    } else {
+      sbStatusEl.style.display = 'none';
+    }
     renderSyncStatus();
     renderNotifPermStatus();
     modal.classList.add('open');
@@ -3194,6 +3273,8 @@
     cfg.sync.enabled = document.getElementById('cfgSyncEnabled').checked;
     cfg.sync.serverUrl = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
     cfg.sync.token = document.getElementById('cfgSyncToken').value.trim();
+    cfg.supabase.url     = document.getElementById('cfgSupabaseUrl').value.trim().replace(/\/+$/,'');
+    cfg.supabase.anonKey = document.getElementById('cfgSupabaseAnonKey').value.trim();
     saveCfg();
     Object.keys(WIDGET_ELS).forEach(function(k){
       WIDGET_ELS[k].style.display = cfg.widgets[k].enabled ? '' : 'none';
@@ -3272,6 +3353,31 @@
         window.removeEventListener('message', clear);
       }
     });
+  });
+
+  document.getElementById('btnSupabaseTest').addEventListener('click', function() {
+    var sbUrl = document.getElementById('cfgSupabaseUrl').value.trim().replace(/\/+$/, '');
+    var sbKey = document.getElementById('cfgSupabaseAnonKey').value.trim();
+    var statusEl = document.getElementById('supabaseStatus');
+    statusEl.style.display = 'block';
+    if (!sbUrl || !sbKey) { statusEl.textContent = 'Completa la URL y la Anon Key primero.'; return; }
+    statusEl.textContent = '…Probando conexión';
+    fetch(sbUrl + '/rest/v1/calls?select=id&limit=1', {
+      headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey }
+    }).then(function(res) {
+      statusEl.textContent = res.ok
+        ? '✓ Conectado (HTTP ' + res.status + ')'
+        : '✗ Error HTTP ' + res.status + ' — verifica URL y Anon Key';
+    }).catch(function(e) {
+      statusEl.textContent = '✗ No se pudo conectar: ' + (e.message || e);
+    });
+  });
+
+  document.getElementById('btnSupabasePull').addEventListener('click', function() {
+    cfg.supabase.url     = document.getElementById('cfgSupabaseUrl').value.trim().replace(/\/+$/, '');
+    cfg.supabase.anonKey = document.getElementById('cfgSupabaseAnonKey').value.trim();
+    saveCfg();
+    pullFromSupabase(document.getElementById('supabaseStatus'));
   });
 
   document.getElementById('btnExport').addEventListener('click', function(){
@@ -4143,6 +4249,13 @@
   updateExchangeRateAuto();
   if(syncConfigured()){
     pullFromServer().then(function(){ renderAll(); renderSyncStatus(); });
+  }
+
+  /* Auto-pull desde Supabase al cargar — solo si está configurado.
+     Se retrasa 2 s para que el Content Script Bridge (800 ms) tenga
+     oportunidad de correr primero en el mismo Chrome. */
+  if(cfg.supabase && cfg.supabase.url && cfg.supabase.anonKey){
+    setTimeout(function(){ pullFromSupabase(null); }, 2000);
   }
 
   /* ---------- Item K: registro del Service Worker (PWA) ----------
