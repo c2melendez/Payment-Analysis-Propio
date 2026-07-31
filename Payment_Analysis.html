@@ -379,8 +379,33 @@
   .brand h1[contenteditable]:hover{background:var(--panel-2);}
   .brand h1[contenteditable]:focus{background:var(--panel-2);box-shadow:0 0 0 1px var(--wire);}
 
-  /* day-edit modal scroll */
-  #dayEntries{max-height:280px;overflow-y:auto;}
+  /* ===== Editar día: mismo patrón de scroll + botones up/down que Ajustes ===== */
+  #dayModalBg .modal{
+    position:relative;
+    max-height:min(85vh,720px);
+    display:flex;flex-direction:column;
+    padding-right:44px; /* espacio para los botones de scroll */
+  }
+  #dayModalBg .modal-scroll{
+    overflow-y:auto;
+    padding-right:6px;
+    scrollbar-width:thin;
+    scrollbar-color:var(--wire) var(--panel-2);
+  }
+  #dayModalBg .modal-scroll::-webkit-scrollbar{width:7px;}
+  #dayModalBg .modal-scroll::-webkit-scrollbar-track{background:var(--panel-2);border-radius:6px;}
+  #dayModalBg .modal-scroll::-webkit-scrollbar-thumb{background:var(--wire);border-radius:6px;}
+  #dayModalBg .modal-scroll::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+  #dayModalBg .modal{max-width:460px;}
+
+  @media (max-width:520px){
+    #dayModalBg .modal, #modalBg .modal{
+      max-height:min(88vh,none);
+      padding-right:38px;
+    }
+    #dayModalBg .modal-scroll-btns, #modalBg .modal-scroll-btns{right:6px;}
+    .modal-scroll-btn{width:24px;height:24px;font-size:10px;}
+  }
 
   /* cycle strip cells are clickable */
   .cell.clickable{cursor:pointer;transition:.12s;}
@@ -1161,21 +1186,27 @@
 <div class="modal-bg" id="dayModalBg">
   <div class="modal">
     <h3 id="dayModalTitle">Editar día</h3>
-    <div class="entry-form">
-      <input type="number" id="dayInMin" placeholder="min" min="1" autocomplete="off">
-      <input type="text" id="dayInNota" placeholder="nota (opcional)" autocomplete="off">
-      <button class="btn sm" id="dayBtnAdd">+ Agregar</button>
+    <div class="modal-scroll" id="dayModalScroll">
+      <div class="entry-form">
+        <input type="number" id="dayInMin" placeholder="min" min="1" autocomplete="off">
+        <input type="text" id="dayInNota" placeholder="nota (opcional)" autocomplete="off">
+        <button class="btn sm" id="dayBtnAdd">+ Agregar</button>
+      </div>
+      <div class="entry-form" style="margin-top:-6px;">
+        <input type="date" id="dayInCallDate" title="Call date (opcional — si lo dejas vacío, usa el día que estás editando)">
+        <input type="time" id="dayInCallStart" title="Call start (opcional)">
+        <span class="rate-status" style="align-self:center;">Call date/start opcionales — para que la entrada también aparezca en el detalle de llamadas de abajo.</span>
+      </div>
+      <div class="entries" id="dayEntries"></div>
+      <h4 style="margin:14px 0 6px;font-size:13px;color:var(--ink-dim);">Detalle de llamadas (Call Date / Call Start / Duration)</h4>
+      <div class="entries" id="dayCalls"></div>
     </div>
-    <div class="entry-form" style="margin-top:-6px;">
-      <input type="date" id="dayInCallDate" title="Call date (opcional — si lo dejas vacío, usa el día que estás editando)">
-      <input type="time" id="dayInCallStart" title="Call start (opcional)">
-      <span class="rate-status" style="align-self:center;">Call date/start opcionales — para que la entrada también aparezca en el detalle de llamadas de abajo.</span>
-    </div>
-    <div class="entries" id="dayEntries"></div>
-    <h4 style="margin:14px 0 6px;font-size:13px;color:var(--ink-dim);">Detalle de llamadas (Call Date / Call Start / Duration)</h4>
-    <div class="entries" id="dayCalls"></div>
     <div class="modal-actions">
       <button class="btn ghost sm" id="dayModalClose">Cerrar</button>
+    </div>
+    <div class="modal-scroll-btns">
+      <button type="button" class="modal-scroll-btn" id="dayModalScrollUp" title="Subir">▲</button>
+      <button type="button" class="modal-scroll-btn" id="dayModalScrollDown" title="Bajar">▼</button>
     </div>
   </div>
 </div>
@@ -2556,6 +2587,8 @@
     renderDayEntries();
     renderDayCalls();
     dayModal.classList.add('open');
+    dayModalScroll.scrollTop = 0;
+    setTimeout(updateDayModalScrollBtns, 0);
   }
   function fmtCallStart(hhmm){
     // 'hhmm' viene de un <input type="time"> (formato 24h "HH:MM") -> "hh:mm AM/PM"
@@ -2584,6 +2617,7 @@
         '<span><span class="amt">'+c.min+' min</span></span>';
       box.appendChild(row);
     });
+    if(typeof updateDayModalScrollBtns==='function') setTimeout(updateDayModalScrollBtns, 0);
   }
   function renderDayEntries(){
     var list = entries[editingISO]||[];
@@ -2607,6 +2641,7 @@
         saveEntries(); renderDayEntries(); renderAll();
       });
     });
+    if(typeof updateDayModalScrollBtns==='function') setTimeout(updateDayModalScrollBtns, 0);
   }
   document.getElementById('dayBtnAdd').addEventListener('click', function(){
     var raw = document.getElementById('dayInMin').value;
@@ -2648,6 +2683,25 @@
   document.getElementById('dayInNota').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('dayBtnAdd').click(); });
   document.getElementById('dayModalClose').addEventListener('click', function(){ dayModal.classList.remove('open'); });
   dayModal.addEventListener('click', function(e){ if(e.target===dayModal) dayModal.classList.remove('open'); });
+
+  /* ---------- Editar día: botones scroll up/down ---------- */
+  var dayModalScroll = document.getElementById('dayModalScroll');
+  var dayScrollUpBtn = document.getElementById('dayModalScrollUp');
+  var dayScrollDownBtn = document.getElementById('dayModalScrollDown');
+  function updateDayModalScrollBtns(){
+    var atTop = dayModalScroll.scrollTop <= 2;
+    var atBottom = dayModalScroll.scrollTop + dayModalScroll.clientHeight >= dayModalScroll.scrollHeight - 2;
+    dayScrollUpBtn.classList.toggle('disabled', atTop);
+    dayScrollDownBtn.classList.toggle('disabled', atBottom);
+  }
+  dayScrollUpBtn.addEventListener('click', function(){
+    dayModalScroll.scrollBy({top:-160, behavior:'smooth'});
+  });
+  dayScrollDownBtn.addEventListener('click', function(){
+    dayModalScroll.scrollBy({top:160, behavior:'smooth'});
+  });
+  dayModalScroll.addEventListener('scroll', updateDayModalScrollBtns);
+  window.addEventListener('resize', function(){ if(dayModal.classList.contains('open')) updateDayModalScrollBtns(); });
 
   /* ---------- Cálculo de estadísticas de ciclo ---------- */
   function cycleStats(start){
