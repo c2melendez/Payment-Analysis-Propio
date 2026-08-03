@@ -375,6 +375,13 @@
   .rate-status{font-size:10.5px;color:var(--ink-faint);margin-top:-6px;margin-bottom:12px;}
   .rate-status.stale{color:var(--amber);}
   .rate-status.very-stale{color:var(--red);}
+  /* El margin-top:-6px de .rate-status arriba está pensado para pegar el aviso
+     justo debajo de un .field (label+input) sin dejar hueco de más. Pero unos
+     cuantos avisos van justo después de un BOTÓN (no de un .field) y ese
+     mismo -6px negativo no se compensa con nada — los montaba encima del
+     botón anterior en vez de separarlos. Se corrige puntualmente: */
+  #notifPermStatus, #extImportStatus, #bridgeSyncStatus{margin-top:8px;}
+  #btnReset + .rate-status{margin-top:8px;}
 
   /* editable title */
   .brand h1[contenteditable]{outline:none;border-radius:4px;padding:1px 4px;margin:-1px -4px;cursor:text;}
@@ -1473,6 +1480,36 @@
     saveEntries(); saveCalls();
   })();
 
+  /* A diferencia de dedupeAccumulatedDuplicates (arriba), esto NO es una purga
+     única con flag — se ejecuta cada vez que entra data nueva. Corrige el bug
+     donde llamadas cortas/0 min capturadas por el portal (p.ej. "Portal (no
+     auditado)" · 01:32 PM · 0 min) que Propio Analytics no reporta en su export
+     se quedaban pegadas junto al resumen auditado del día en vez de desaparecer
+     como el resto: al no existir fila equivalente en el histórico, no había con
+     qué sobrescribirlas por identidad. Para un día ya auditado (existe
+     'imp_YYYY-MM-DD'), el histórico manda sin excepción — se descarta cualquier
+     entrada/llamada que no venga de esa importación. */
+  function reconcileAuditedDays(){
+    var changed = false;
+    Object.keys(entries).forEach(function(dISO){
+      if(!isAuditedDate(dISO)) return;
+      var arr = entries[dISO]||[];
+      var kept = arr.filter(function(e){ return e && e.id && e.id.indexOf('imp_')===0; });
+      if(kept.length !== arr.length){ entries[dISO] = kept; changed = true; }
+    });
+    Object.keys(calls).forEach(function(dISO){
+      if(!isAuditedDate(dISO)) return;
+      var arr = calls[dISO]||[];
+      var kept = arr.filter(function(c){ return c && c.id && c.id.indexOf('hist_')===0; });
+      if(kept.length !== arr.length){ calls[dISO] = kept; changed = true; }
+    });
+    if(changed){ saveEntries(); saveCalls(); }
+    return changed;
+  }
+  // Limpia de inmediato cualquier residuo ya acumulado (p.ej. por syncs previos
+  // hechos antes de esta corrección), sin esperar a la próxima importación.
+  reconcileAuditedDays();
+
   function loadJSON(key, fallback){
     try{
       var raw = localStorage.getItem(key);
@@ -1680,6 +1717,7 @@
       mergeById(entries, callsForEntries, function(r){
         return {id:r.id, min:r.min, nota:'Sincronizado del backend'+(r.callStart?' · '+r.callStart:'')};
       });
+      reconcileAuditedDays();
       localStorage.setItem('bitacora_entries', JSON.stringify(entries));
       localStorage.setItem('bitacora_calls', JSON.stringify(calls));
       cfg.sync.lastSyncAt = Date.now();
@@ -1751,7 +1789,14 @@
     // 2) Llamadas del portal — dedup a nivel de llamada individual, no de día.
     //    upsertCallsByIdentity usa callIdentityKey(fecha+hora) y SOURCE_PRIORITY:
     //    portal-json (2) pierde contra dashboard-json (4) — misma llamada → se descarta.
-    var portalCalls = (callItems || []).filter(function(r) { return r.date && r.id; })
+    //    PERO eso solo funciona si el histórico auditado trae esa MISMA llamada
+    //    (misma fecha+hora). Propio Analytics no reporta llamadas de 0 min o no
+    //    facturables, así que una llamada corta capturada por el portal puede no
+    //    tener ninguna fila equivalente en el histórico — sin match de identidad,
+    //    upsertCallsByIdentity la agregaba igual, aunque el día ya estuviera auditado.
+    //    Se excluyen aquí los días ya auditados por completo (igual que hacen
+    //    fileImportExt y pullFromServer) para que el histórico mande sin excepción.
+    var portalCalls = (callItems || []).filter(function(r) { return r.date && r.id && !isAuditedDate(r.date); })
       .map(function(r) { return Object.assign({}, r, { source: r.source || 'portal-json' }); });
 
     if (portalCalls.length > 0) {
@@ -1782,6 +1827,8 @@
         parts.push(addedCalls.length + ' llamada(s) nueva(s) del portal');
       }
     }
+
+    reconcileAuditedDays();
 
     if (parts.length > 0) {
       renderAll();
@@ -2325,12 +2372,14 @@
       updateDisplay();
     }
 
-    document.getElementById('fwModeDown').addEventListener('click', function(){ setMode('down'); });
-    document.getElementById('fwModeUp').addEventListener('click', function(){ setMode('up'); });
+    var modeDownBtn = document.getElementById('fwModeDown');
+    var modeUpBtn = document.getElementById('fwModeUp');
+    modeDownBtn.addEventListener('click', function(){ setMode('down'); });
+    modeUpBtn.addEventListener('click', function(){ setMode('up'); });
     function setMode(m){
       mode = m;
-      document.getElementById('fwModeDown').classList.toggle('active', m==='down');
-      document.getElementById('fwModeUp').classList.toggle('active', m==='up');
+      modeDownBtn.classList.toggle('active', m==='down');
+      modeUpBtn.classList.toggle('active', m==='up');
       setRow.style.display = m==='down' ? 'flex' : 'none';
       pause();
       if(m==='down'){ remaining = targetMinutes*60; } else { elapsed = 0; }
@@ -2359,6 +2408,19 @@
     var viewYear = today.getFullYear();
     var viewMonth = today.getMonth(); // 0-indexed
 
+    /* Referencias cacheadas UNA sola vez, igual que se corrigió antes en el
+       Traductor: tras un pop-out, estos nodos (calMonthLabel, calGrid) se
+       mueven junto con el widget al document de la ventana emergente. Volver
+       a buscarlos con document.getElementById(...) en cada render() — como
+       hacía antes este widget — apuntaba siempre al document PRINCIPAL, que
+       ya no los contiene una vez desprendido, así que devolvía null y
+       render() fallaba en silencio: mes/año no cambiaba y el grid de días
+       quedaba congelado o desaparecía al abrir/cerrar la ventana propia. */
+    var monthLabelEl = document.getElementById('calMonthLabel');
+    var gridEl = document.getElementById('calGrid');
+    var prevBtn = document.getElementById('calPrev');
+    var nextBtn = document.getElementById('calNext');
+
     function inRange(d, start, end){
       return d.getTime()>=start.getTime() && d.getTime()<=end.getTime();
     }
@@ -2383,8 +2445,8 @@
       return cells;
     }
     function render(){
-      document.getElementById('calMonthLabel').textContent = MONTH_NAMES[viewMonth]+' '+viewYear;
-      var grid = document.getElementById('calGrid');
+      monthLabelEl.textContent = MONTH_NAMES[viewMonth]+' '+viewYear;
+      var grid = gridEl;
       grid.innerHTML='';
       DOW.forEach(function(l){
         var el = document.createElement('div');
@@ -2406,17 +2468,22 @@
           return function(){
             var cs = cycleStartFor(d);
             var dayNum = dayIndexInCycle(d, cs);
+            /* El editor de día vive siempre en el document principal, aunque el
+               calendario esté en su propia ventana pop-out. Sin esto, el modal
+               se abre "detrás" de la ventana emergente y parece que el clic no
+               hizo nada. */
+            try{ window.focus(); }catch(e){}
             openDayEditor(iso(d), dayNum);
           };
         })(c.date));
         grid.appendChild(el);
       });
     }
-    document.getElementById('calPrev').addEventListener('click', function(){
+    prevBtn.addEventListener('click', function(){
       viewMonth--; if(viewMonth<0){ viewMonth=11; viewYear--; }
       render();
     });
-    document.getElementById('calNext').addEventListener('click', function(){
+    nextBtn.addEventListener('click', function(){
       viewMonth++; if(viewMonth>11){ viewMonth=0; viewYear++; }
       render();
     });
@@ -3698,6 +3765,7 @@
           if(newLive > 0) parts.push(newLive+' llamada(s) nueva(s) en vivo');
         }
 
+        reconcileAuditedDays();
         renderAll();
         statusEl.textContent = parts.length>0
           ? '✓ Importado: '+parts.join(' · ')+'.'
