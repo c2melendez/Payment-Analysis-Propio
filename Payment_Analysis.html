@@ -2530,7 +2530,7 @@
           '<path d="'+arcPath(120,180)+'" stroke="'+VIZ_COLORS.green+'" stroke-width="18" fill="none" stroke-linecap="round"/>'+
           '<line x1="'+cx+'" y1="'+cy+'" x2="'+np[0].toFixed(1)+'" y2="'+np[1].toFixed(1)+'" stroke="'+VIZ_COLORS.ink+'" stroke-width="3" stroke-linecap="round"/>'+
           '<circle cx="'+cx+'" cy="'+cy+'" r="6" fill="'+VIZ_COLORS.ink+'"/>'+
-          '<text x="'+cx+'" y="'+(cy-40)+'" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="22" font-weight="700" fill="'+color+'">'+Math.round(pct)+'%</text>'+
+          '<text x="'+cx+'" y="'+(cy-40)+'" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="22" font-weight="700" fill="'+color+'">'+pct.toFixed(2)+'%</text>'+
         '</svg>';
       return;
     }
@@ -2576,7 +2576,7 @@
     var dayIdx = dayIndexInCycle(today, start);
     var min = minutesForDate(dISO);
     var goal = cfg.dailyGoal;
-    var pct = Math.min(100, Math.round((min/goal)*100));
+    var pct = Math.min(100, (min/goal)*100);
     var status = statusOf(min, goal);
 
     document.getElementById('hoyEyebrow').textContent = 'Día '+dayIdx+' de 14 · Ciclo '+fmtRangeShort(start);
@@ -2592,7 +2592,7 @@
     var hoyPts = [], hoyRunning = 0;
     (entries[dISO]||[]).forEach(function(e){ hoyRunning += Number(e.min||0); hoyPts.push(hoyRunning); });
     renderPerfViz('perfViz', 'hoy', min, goal, status, hoyPts);
-    document.getElementById('hoyPct').textContent = pct+'%';
+    document.getElementById('hoyPct').textContent = pct.toFixed(2)+'%';
     document.getElementById('hoyResta').textContent = Math.max(0, goal-min);
 
     var usd = usdForDate(dISO);
@@ -2647,7 +2647,7 @@
   /* ---------- Item M: mensaje de proyección de cierre de ciclo, dinámico ---------- */
   function dynamicProjectionMessage(stats){
     if(stats.daysWithData<1) return 'Sin datos suficientes todavía para proyectar.';
-    var msg = 'Ritmo promedio: <b>'+Math.round(stats.avgMin)+' min/día</b>. Si se mantiene, el ciclo cerraría el día 14 con <b>'+fmtMoney(stats.projTotal)+'</b> ('+Math.round(stats.projPctGoal)+'% de la meta).';
+    var msg = 'Ritmo promedio: <b>'+Math.round(stats.avgMin)+' min/día</b>. Si se mantiene, el ciclo cerraría el día 14 con <b>'+fmtMoney(stats.projTotal)+'</b> ('+stats.projPctGoal.toFixed(2)+'% de la meta).';
     if(stats.projTotal < cfg.cycleGoal && stats.avgMin>0){
       var neededAvg = stats.total>=cfg.cycleGoal ? stats.avgMin : null;
       // minutos/día promedio necesarios en TODO el ciclo para llegar a la meta (aprox., ignorando el escalón de comisión)
@@ -2655,7 +2655,7 @@
       var neededMinPerDay = neededTotalMin/14;
       var pctIncrease = stats.avgMin>0 ? ((neededMinPerDay/stats.avgMin)-1)*100 : 0;
       if(pctIncrease>0 && isFinite(pctIncrease)){
-        msg += ' Necesitas subir tu ritmo un <b>'+Math.round(pctIncrease)+'%</b> (a ~'+Math.round(neededMinPerDay)+' min/día) para llegar a '+fmtMoney(cfg.cycleGoal)+'.';
+        msg += ' Necesitas subir tu ritmo un <b>'+pctIncrease.toFixed(2)+'%</b> (a ~'+Math.round(neededMinPerDay)+' min/día) para llegar a '+fmtMoney(cfg.cycleGoal)+'.';
       }
     } else if(stats.projTotal >= cfg.cycleGoal){
       msg += ' Vas en camino a superar la meta. 🎯';
@@ -2683,7 +2683,7 @@
   function renderFooterStats(){
     var el = document.getElementById('footerStats');
     if(!el) return;
-    el.innerHTML = 'Meta diaria '+cfg.dailyGoal+' min &middot; Meta de ciclo '+fmtMoney(cfg.cycleGoal)+' &middot; Tarifa '+fmtMoney(cfg.ratePerMin)+'/min &middot; Comisión Deel '+(cfg.feePct*100).toFixed(0)+'% (subtotal &lt; '+fmtMoney(cfg.feeThreshold)+') o '+fmtMoney(cfg.feeFlat)+' fijo';
+    el.innerHTML = 'Meta diaria '+cfg.dailyGoal+' min &middot; Meta de ciclo '+fmtMoney(cfg.cycleGoal)+' &middot; Tarifa '+fmtMoney(cfg.ratePerMin)+'/min &middot; Comisión Deel '+(cfg.feePct*100).toFixed(2)+'% (subtotal &lt; '+fmtMoney(cfg.feeThreshold)+') o '+fmtMoney(cfg.feeFlat)+' fijo';
   }
 
   /* ---------- Editor de cualquier día del ciclo (1–14) ---------- */
@@ -3022,17 +3022,17 @@
 
     // a. % ingreso por llamada vs % ingreso por ajuste
     html += '<div class="rel-block"><h4>Ingreso por llamada vs. ingreso por ajuste</h4>'+
-      '<div class="split-bar"><i style="width:'+cs.pctCall.toFixed(1)+'%;background:var(--accent)"></i><i style="width:'+cs.pctAdj.toFixed(1)+'%;background:var(--amber)"></i></div>'+
-      '<div class="split-legend"><span>Llamada &middot; <b>'+cs.pctCall.toFixed(1)+'%</b> ('+fmtMoney(cs.callEarnings)+')</span>'+
-      '<span>Ajuste &middot; <b>'+cs.pctAdj.toFixed(1)+'%</b> ('+fmtMoney(cs.adjEarnings)+')</span></div></div>';
+      '<div class="split-bar"><i style="width:'+cs.pctCall.toFixed(2)+'%;background:var(--accent)"></i><i style="width:'+cs.pctAdj.toFixed(2)+'%;background:var(--amber)"></i></div>'+
+      '<div class="split-legend"><span>Llamada &middot; <b>'+cs.pctCall.toFixed(2)+'%</b> ('+fmtMoney(cs.callEarnings)+')</span>'+
+      '<span>Ajuste &middot; <b>'+cs.pctAdj.toFixed(2)+'%</b> ('+fmtMoney(cs.adjEarnings)+')</span></div></div>';
 
     // b. % ingreso audio vs video
     var abTotal = cs.audioEarnings+cs.videoEarnings;
     html += '<div class="rel-block"><h4>Ingreso por llamada de audio vs. video</h4>';
     if(abTotal>0){
-      html += '<div class="split-bar"><i style="width:'+cs.pctAudio.toFixed(1)+'%;background:var(--green)"></i><i style="width:'+cs.pctVideo.toFixed(1)+'%;background:var(--red)"></i></div>'+
-        '<div class="split-legend"><span>Audio &middot; <b>'+cs.pctAudio.toFixed(1)+'%</b> ('+fmtMoney(cs.audioEarnings)+')</span>'+
-        '<span>Video &middot; <b>'+cs.pctVideo.toFixed(1)+'%</b> ('+fmtMoney(cs.videoEarnings)+')</span></div>';
+      html += '<div class="split-bar"><i style="width:'+cs.pctAudio.toFixed(2)+'%;background:var(--green)"></i><i style="width:'+cs.pctVideo.toFixed(2)+'%;background:var(--red)"></i></div>'+
+        '<div class="split-legend"><span>Audio &middot; <b>'+cs.pctAudio.toFixed(2)+'%</b> ('+fmtMoney(cs.audioEarnings)+')</span>'+
+        '<span>Video &middot; <b>'+cs.pctVideo.toFixed(2)+'%</b> ('+fmtMoney(cs.videoEarnings)+')</span></div>';
     } else {
       html += '<div class="empty" style="padding:8px 2px;">Sin columna de línea de servicio (Audio/Video) en los datos importados.</div>';
     }
@@ -3044,7 +3044,7 @@
       cs.segStats.map(function(s){
         return '<div class="seg-row"><span class="seg-name">'+s.name+'</span>'+
           '<span class="seg-bar"><i style="width:'+(maxSegIncome>0?(s.pctIncome/maxSegIncome*100):0).toFixed(1)+'%"></i></span>'+
-          '<span class="seg-val">'+s.pctIncome.toFixed(1)+'%</span></div>';
+          '<span class="seg-val">'+s.pctIncome.toFixed(2)+'%</span></div>';
       }).join('')+
       '</div></div>';
 
@@ -3145,10 +3145,10 @@
     document.getElementById('legAmber').textContent = 'Medio ('+halfGoal+'–'+(cfg.dailyGoal-1)+' min)';
     document.getElementById('legGreen').textContent = 'Meta (≥'+cfg.dailyGoal+' min)';
 
-    var pctCiclo = Math.min(100, Math.round((stats.totalMin/(cfg.dailyGoal*14))*100));
+    var pctCiclo = Math.min(100, (stats.totalMin/(cfg.dailyGoal*14))*100);
     document.getElementById('cTiempoMin').textContent = stats.totalMin.toLocaleString()+' / '+(cfg.dailyGoal*14).toLocaleString();
     document.getElementById('cTiempoHrs').textContent = fmtHrs(stats.totalMin)+' h';
-    document.getElementById('cTiempoPct').textContent = pctCiclo+'%';
+    document.getElementById('cTiempoPct').textContent = pctCiclo.toFixed(2)+'%';
 
     var cycleGoalMin = cfg.dailyGoal*14;
     var cycleStatus = statusOf(stats.totalMin, cycleGoalMin);
@@ -3174,7 +3174,7 @@
     document.getElementById('fcProjTotal').textContent = fmtMoney(fc.projTotal);
     document.getElementById('fcProjHnl').textContent = fmtHNL(fc.projTotalHNL);
     document.getElementById('fcBestSegment').textContent = (fc.bestSegment && fc.bestSegment.hasData)
-      ? fc.bestSegment.segment+' — '+fc.bestSegment.pct.toFixed(1)+'% de productividad'
+      ? fc.bestSegment.segment+' — '+fc.bestSegment.pct.toFixed(2)+'% de productividad'
       : 'Sin detalle por llamada aún';
     var conf = forecastConfidence(start);
     document.getElementById('fcRange').textContent = conf
@@ -3347,7 +3347,7 @@
       var st = item.stats;
       row.innerHTML =
         '<div><div class="range">'+fmtRangeShort(item.start)+(item.isCurrent?' &middot; en curso':'')+'</div>'+
-        '<div class="tag">'+Math.round((st.totalMin/(cfg.dailyGoal*14))*100)+'% del tiempo &middot; '+st.dayIdx+'/14 días</div></div>'+
+        '<div class="tag">'+((st.totalMin/(cfg.dailyGoal*14))*100).toFixed(2)+'% del tiempo &middot; '+st.dayIdx+'/14 días</div></div>'+
         '<div class="right" style="display:flex;align-items:center;gap:12px;">'+
           '<div><div class="amount">'+fmtMoney(st.total)+'</div>'+
           '<div class="tag">'+(st.total>=cfg.cycleGoal?'meta cumplida':'meta: '+fmtMoney(cfg.cycleGoal))+'</div></div>'+
@@ -4473,7 +4473,7 @@
         if(!translated){ throw new Error('respuesta vacía'); }
         outputEl.value = translated;
         copyOutputBtn.style.display = '';
-        setStatus(data.responseData.match!=null ? 'Traducido (confianza ~'+Math.round(data.responseData.match*100)+'%)' : 'Traducido ✓');
+        setStatus(data.responseData.match!=null ? 'Traducido (confianza ~'+(data.responseData.match*100).toFixed(2)+'%)' : 'Traducido ✓');
       }).catch(function(e){
         if(mySeq !== reqSeq) return;
         logError('trTranslate', e);
