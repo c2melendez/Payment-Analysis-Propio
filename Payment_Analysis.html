@@ -568,6 +568,7 @@
   .widget-float.w-collapsed .cal-mark, .widget-float.w-collapsed .cal-label,
   .widget-float.w-collapsed .tr-mark, .widget-float.w-collapsed .tr-label,
   .widget-float.w-collapsed .nt-mark, .widget-float.w-collapsed .nt-label,
+  .widget-float.w-collapsed .calc-mark, .widget-float.w-collapsed .calc-label,
   .widget-float.w-collapsed .w-size-btn{display:none;}
   .widget-float.w-collapsed .w-head-btns{width:100%;height:100%;gap:0;}
   .widget-float.w-collapsed .fw-collapse, .widget-float.w-collapsed .cal-collapse{
@@ -626,7 +627,9 @@
   .widget-float.w-popped-out.w-collapsed .tr-mark,
   .widget-float.w-popped-out.w-collapsed .tr-label,
   .widget-float.w-popped-out.w-collapsed .nt-mark,
-  .widget-float.w-popped-out.w-collapsed .nt-label{display:inline-block!important;}
+  .widget-float.w-popped-out.w-collapsed .nt-label,
+  .widget-float.w-popped-out.w-collapsed .calc-mark,
+  .widget-float.w-popped-out.w-collapsed .calc-label{display:inline-block!important;}
   .widget-float.w-popped-out.w-collapsed .w-head-btns{width:auto;height:auto;gap:2px;}
   .widget-float.w-popped-out.w-collapsed .fw-collapse,
   .widget-float.w-popped-out.w-collapsed .cal-collapse{
@@ -682,7 +685,41 @@
   .nt-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
   .nt-body{padding:12px;}
   #ntText{width:100%;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:12px;min-height:90px;}
-  @media (max-width:520px){.tr-widget{width:210px;}.nt-widget{width:180px;}}
+
+  /* ===== Widget: Calculadora ===== */
+  .calc-widget{
+    position:fixed;top:16px;right:16px;z-index:70;width:232px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 24px var(--shadow-soft);font-family:'JetBrains Mono',monospace;
+  }
+  .calc-head{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .calc-mark{width:7px;height:7px;border-radius:2px;background:var(--accent);flex-shrink:0;transform:rotate(45deg);}
+  .calc-label{font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--ink-dim);flex:1;}
+  .calc-body{padding:12px;}
+  .calc-display{
+    font-family:'Space Grotesk',sans-serif;font-size:25px;font-weight:700;text-align:right;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;
+    overflow-x:auto;white-space:nowrap;
+  }
+  .calc-display::-webkit-scrollbar{height:0;}
+  .calc-expr{
+    font-size:10.5px;color:var(--ink-faint);text-align:right;min-height:14px;
+    margin:4px 2px 8px;overflow-x:auto;white-space:nowrap;
+  }
+  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .calc-btn{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;
+    padding:10px 4px;border-radius:6px;cursor:pointer;line-height:1;
+  }
+  .calc-btn:hover{border-color:var(--wire);}
+  .calc-btn:active{background:var(--wire);}
+  .calc-btn.calc-fn{color:var(--ink-dim);}
+  .calc-btn.calc-op{background:var(--amber-dim);color:var(--ink);border-color:var(--amber);}
+  .calc-btn.calc-op.active{background:var(--amber);color:var(--panel);}
+  .calc-btn.calc-eq{background:var(--accent);color:var(--panel);border-color:var(--accent);}
+  @media (max-width:520px){.tr-widget{width:210px;}.nt-widget{width:180px;}.calc-widget{width:200px;}}
+  @media (max-width:400px){.calc-btn{padding:8px 4px;font-size:12.5px;}.calc-display{font-size:20px;}}
 
   /* calendario: días clicables para ingreso manual (req. 6) */
   .cal-day.cal-day-clickable{cursor:pointer;}
@@ -882,6 +919,48 @@
   </div>
 </div>
 
+<!-- ===================== CALCULADORA FLOTANTE (visible en todas las pestañas) ===================== -->
+<div class="calc-widget widget-float" id="calcWidget">
+  <div class="calc-head w-head" id="calcHead">
+    <span class="w-id-icon" aria-hidden="true"></span>    <span class="calc-mark"></span>
+    <span class="calc-label">Calculadora</span>
+    <div class="w-head-btns">
+      <button class="w-size-btn" id="calcWidgetReset" title="Restablecer tamaño y posición">⟲</button>
+      <button class="w-size-btn w-popout-btn" id="calcPopout" title="Abrir en ventana independiente">⤢</button>
+      <button class="cal-collapse" id="calcCollapse" title="Minimizar/expandir">
+        <span class="w-collapse-arrow">▾</span>
+        <span class="w-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="7" y1="6" x2="17" y2="6"></line><line x1="7.5" y1="11" x2="7.5" y2="11"></line><line x1="12" y1="11" x2="12" y2="11"></line><line x1="16.5" y1="11" x2="16.5" y2="11"></line><line x1="7.5" y1="15" x2="7.5" y2="15"></line><line x1="12" y1="15" x2="12" y2="15"></line><line x1="16.5" y1="15" x2="16.5" y2="15"></line><line x1="7.5" y1="19" x2="7.5" y2="19"></line><line x1="12" y1="19" x2="12" y2="19"></line><line x1="16.5" y1="19" x2="16.5" y2="19"></line></svg></span>
+      </button>
+    </div>
+  </div>
+  <div class="calc-body w-body" id="calcBody">
+    <div class="calc-display" id="calcDisplay">0</div>
+    <div class="calc-expr" id="calcExpr">&nbsp;</div>
+    <div class="calc-grid">
+      <button class="calc-btn calc-fn" data-key="clear">C</button>
+      <button class="calc-btn calc-fn" data-key="backspace">⌫</button>
+      <button class="calc-btn calc-fn" data-key="percent">%</button>
+      <button class="calc-btn calc-op" data-key="/">÷</button>
+      <button class="calc-btn" data-key="7">7</button>
+      <button class="calc-btn" data-key="8">8</button>
+      <button class="calc-btn" data-key="9">9</button>
+      <button class="calc-btn calc-op" data-key="*">×</button>
+      <button class="calc-btn" data-key="4">4</button>
+      <button class="calc-btn" data-key="5">5</button>
+      <button class="calc-btn" data-key="6">6</button>
+      <button class="calc-btn calc-op" data-key="-">−</button>
+      <button class="calc-btn" data-key="1">1</button>
+      <button class="calc-btn" data-key="2">2</button>
+      <button class="calc-btn" data-key="3">3</button>
+      <button class="calc-btn calc-op" data-key="+">+</button>
+      <button class="calc-btn" data-key="sign">±</button>
+      <button class="calc-btn" data-key="0">0</button>
+      <button class="calc-btn" data-key=".">.</button>
+      <button class="calc-btn calc-op calc-eq" data-key="=">=</button>
+    </div>
+  </div>
+</div>
+
 <div class="agent-badge" id="agentBadge" title="Agent ID detectado desde la hoja de cálculo importada">
   <span class="dot"></span><span>Agent</span> <span id="agentIdText">—</span>
 </div>
@@ -913,6 +992,7 @@
       <label class="widgets-menu-item"><input type="checkbox" id="wmTimer"> Temporizador</label>
       <label class="widgets-menu-item"><input type="checkbox" id="wmNotes"> Notas rápidas</label>
       <label class="widgets-menu-item"><input type="checkbox" id="wmTranslator"> Traductor</label>
+      <label class="widgets-menu-item"><input type="checkbox" id="wmCalculator"> Calculadora</label>
     </div>
   </div>
 </nav>
@@ -1161,6 +1241,7 @@
           <label><input type="checkbox" id="cfgWCalendar">Calendario del ciclo</label>
           <label><input type="checkbox" id="cfgWTranslator">Traductor</label>
           <label><input type="checkbox" id="cfgWNotes">Notas rápidas</label>
+          <label><input type="checkbox" id="cfgWCalculator">Calculadora</label>
         </div>
         <button class="btn ghost sm" id="btnResetWidgets" style="margin-top:6px;">↺ Restablecer posición y tamaño de widgets</button>
       </div>
@@ -1313,7 +1394,8 @@
       timer:      {enabled:true,  collapsed:true, x:null, y:null, width:null, height:null},
       calendar:   {enabled:true,  collapsed:true, x:null, y:null, width:null, height:null},
       translator: {enabled:false, collapsed:true, x:null, y:null, width:null, height:null},
-      notes:      {enabled:false, collapsed:true, x:null, y:null, width:null, height:null}
+      notes:      {enabled:false, collapsed:true, x:null, y:null, width:null, height:null},
+      calculator: {enabled:false, collapsed:true, x:null, y:null, width:null, height:null}
     },
     // ---- Notas rápidas ----
     quickNotes: '',
@@ -3542,6 +3624,7 @@
     document.getElementById('cfgWCalendar').checked = !!cfg.widgets.calendar.enabled;
     document.getElementById('cfgWTranslator').checked = !!cfg.widgets.translator.enabled;
     document.getElementById('cfgWNotes').checked = !!cfg.widgets.notes.enabled;
+    document.getElementById('cfgWCalculator').checked = !!cfg.widgets.calculator.enabled;
     document.getElementById('cfgSyncEnabled').checked = !!cfg.sync.enabled;
     document.getElementById('cfgSyncUrl').value = cfg.sync.serverUrl || '';
     document.getElementById('cfgSyncToken').value = cfg.sync.token || '';
@@ -3623,6 +3706,7 @@
     cfg.widgets.calendar.enabled = document.getElementById('cfgWCalendar').checked;
     cfg.widgets.translator.enabled = document.getElementById('cfgWTranslator').checked;
     cfg.widgets.notes.enabled = document.getElementById('cfgWNotes').checked;
+    cfg.widgets.calculator.enabled = document.getElementById('cfgWCalculator').checked;
     cfg.sync.enabled = document.getElementById('cfgSyncEnabled').checked;
     cfg.sync.serverUrl = document.getElementById('cfgSyncUrl').value.trim().replace(/\/+$/,'');
     cfg.sync.token = document.getElementById('cfgSyncToken').value.trim();
@@ -3632,7 +3716,7 @@
     Object.keys(WIDGET_ELS).forEach(function(k){
       WIDGET_ELS[k].style.display = cfg.widgets[k].enabled ? '' : 'none';
     });
-    var wmMap = {wmCalendar:'calendar', wmTimer:'timer', wmNotes:'notes', wmTranslator:'translator'};
+    var wmMap = {wmCalendar:'calendar', wmTimer:'timer', wmNotes:'notes', wmTranslator:'translator', wmCalculator:'calculator'};
     Object.keys(wmMap).forEach(function(id){
       var chk = document.getElementById(id);
       if(chk) chk.checked = !!cfg.widgets[wmMap[id]].enabled;
@@ -4039,7 +4123,8 @@
     {key:'calendar',   elId:'calWidget',        resetId:'calWidgetReset', collapseId:'calCollapse', bodyId:'calBody', popoutId:'calPopout', title:'Calendario del ciclo', legibleW:300, legibleH:360},
     {key:'timer',      elId:'focusWidget',      resetId:'fwWidgetReset',  collapseId:'fwCollapse',  bodyId:'fwBody',  popoutId:'fwPopout',  title:'Temporizador',        legibleW:260, legibleH:220},
     {key:'translator', elId:'translatorWidget', resetId:'trWidgetReset',  collapseId:'trCollapse',  bodyId:'trBody',  popoutId:'trPopout',  title:'Traductor',           legibleW:360, legibleH:460},
-    {key:'notes',      elId:'notesWidget',      resetId:'ntWidgetReset',  collapseId:'ntCollapse',  bodyId:'ntBody',  popoutId:'ntPopout',  title:'Notas rápidas',       legibleW:320, legibleH:340}
+    {key:'notes',      elId:'notesWidget',      resetId:'ntWidgetReset',  collapseId:'ntCollapse',  bodyId:'ntBody',  popoutId:'ntPopout',  title:'Notas rápidas',       legibleW:320, legibleH:340},
+    {key:'calculator', elId:'calcWidget',       resetId:'calcWidgetReset',collapseId:'calcCollapse',bodyId:'calcBody',popoutId:'calcPopout',title:'Calculadora',         legibleW:232, legibleH:392}
   ];
   var WIDGET_ELS = {}; // key -> DOM element, usado también por Ajustes/menú Widgets para mostrar/ocultar al vuelo
   var WIDGET_MIN_W = 170, WIDGET_MIN_H = 150;
@@ -4469,7 +4554,7 @@
     var btn = document.getElementById('btnWidgetsMenu');
     var menu = document.getElementById('widgetsMenu');
     if(!btn || !menu) return;
-    var MAP = {wmCalendar:'calendar', wmTimer:'timer', wmNotes:'notes', wmTranslator:'translator'};
+    var MAP = {wmCalendar:'calendar', wmTimer:'timer', wmNotes:'notes', wmTranslator:'translator', wmCalculator:'calculator'};
 
     function syncChecks(){
       Object.keys(MAP).forEach(function(id){
@@ -4481,7 +4566,7 @@
       cfg.widgets[key].enabled = enabled;
       saveCfg();
       if(WIDGET_ELS[key]) WIDGET_ELS[key].style.display = enabled ? '' : 'none';
-      var cfgId = {timer:'cfgWTimer', calendar:'cfgWCalendar', translator:'cfgWTranslator', notes:'cfgWNotes'}[key];
+      var cfgId = {timer:'cfgWTimer', calendar:'cfgWCalendar', translator:'cfgWTranslator', notes:'cfgWNotes', calculator:'cfgWCalculator'}[key];
       var cfgChk = document.getElementById(cfgId);
       if(cfgChk) cfgChk.checked = enabled;
       requestAnimationFrame(layoutWidgetDock);
@@ -4671,6 +4756,137 @@
         hint.textContent = '—';
       }
     });
+    /* Minimizar/expandir de este widget se maneja de forma centralizada en initWidgetChrome. */
+  })();
+
+  /* ---------- Widget: Calculadora ---------- */
+  (function initCalculatorWidget(){
+    var displayEl = document.getElementById('calcDisplay');
+    var exprEl = document.getElementById('calcExpr');
+    var grid = document.querySelector('#calcWidget .calc-grid');
+    if(!displayEl || !exprEl || !grid) return;
+
+    var MAX_DIGITS = 15;
+    var current = '0';      // lo que se muestra en pantalla (operando actual)
+    var stored = null;      // operando previo
+    var pendingOp = null;   // '+','-','*','/'
+    var justEvaluated = false; // el último toque fue "="
+    var freshOperand = false; // se acaba de elegir un operador: el próximo dígito empieza un número nuevo
+    var exprText = '';
+
+    function opSymbol(op){ return {'+':'+', '-':'−', '*':'×', '/':'÷'}[op] || ''; }
+
+    function formatNumber(n){
+      if(!isFinite(n)) return 'Error';
+      var s = String(n);
+      if(s.length > MAX_DIGITS){
+        s = n.toPrecision(10).replace(/\.?0+$/,'').replace(/\.?0+e/,'e');
+        if(String(Number(s)).length <= MAX_DIGITS) s = String(Number(s));
+      }
+      return s;
+    }
+
+    function render(){
+      displayEl.textContent = current;
+      exprEl.innerHTML = exprText ? exprText : '&nbsp;';
+    }
+
+    function inputDigit(d){
+      if(justEvaluated){ current = '0'; exprText = ''; justEvaluated = false; }
+      if(freshOperand){ current = '0'; freshOperand = false; }
+      if(current==='0' && d!=='.'){ current = d; }
+      else if(d==='.' && current.indexOf('.')!==-1){ /* ya tiene punto: ignorar */ }
+      else if(current.replace('-','').replace('.','').length >= MAX_DIGITS){ /* límite alcanzado */ }
+      else { current += d; }
+      render();
+    }
+
+    function clearAll(){
+      current = '0'; stored = null; pendingOp = null; justEvaluated = false; freshOperand = false; exprText = '';
+      render();
+    }
+
+    function backspace(){
+      if(justEvaluated || freshOperand) return;
+      current = current.length>1 ? current.slice(0,-1) : '0';
+      render();
+    }
+
+    function toggleSign(){
+      if(current==='0') return;
+      current = current.charAt(0)==='-' ? current.slice(1) : '-'+current;
+      render();
+    }
+
+    function applyPercent(){
+      var n = parseFloat(current);
+      if(isNaN(n)) return;
+      var result = stored!=null && pendingOp ? (stored * n / 100) : (n / 100);
+      current = formatNumber(round2Calc(result));
+      justEvaluated = false;
+      freshOperand = false;
+      render();
+    }
+
+    function round2Calc(n){
+      // evita residuos de coma flotante (0.1+0.2) sin recortar decimales legítimos
+      return Math.round((n + Number.EPSILON) * 1e10) / 1e10;
+    }
+
+    function compute(a, b, op){
+      switch(op){
+        case '+': return a + b;
+        case '-': return a - b;
+        case '*': return a * b;
+        case '/': return b===0 ? NaN : a / b;
+        default:  return b;
+      }
+    }
+
+    function chooseOperator(op){
+      /* si el usuario elige un operador y luego, sin escribir ningún dígito nuevo,
+         toca otro operador, solo se reemplaza el operador pendiente (no se recalcula
+         con la pantalla en 0 que quedó como marcador de posición) */
+      if(pendingOp && stored!=null && !justEvaluated && !freshOperand){
+        var n = parseFloat(current);
+        stored = round2Calc(compute(stored, n, pendingOp));
+      } else if(stored==null || justEvaluated){
+        stored = parseFloat(current);
+      }
+      pendingOp = op;
+      justEvaluated = false;
+      freshOperand = true;
+      exprText = formatNumber(stored) + ' ' + opSymbol(op);
+      current = '0'; // limpia la pantalla para permitir ingresar el siguiente número
+      render();
+    }
+
+    function equals(){
+      if(pendingOp==null || stored==null) return;
+      var n = parseFloat(current);
+      var result = round2Calc(compute(stored, n, pendingOp));
+      exprText = formatNumber(stored) + ' ' + opSymbol(pendingOp) + ' ' + formatNumber(n) + ' =';
+      current = formatNumber(result);
+      stored = null; pendingOp = null; justEvaluated = true; freshOperand = false;
+      render();
+    }
+
+    grid.addEventListener('click', function(e){
+      var btn = e.target.closest('.calc-btn');
+      if(!btn) return;
+      var key = btn.getAttribute('data-key');
+      if(key==null) return;
+      if(/^[0-9]$/.test(key)) inputDigit(key);
+      else if(key==='.') inputDigit('.');
+      else if(key==='clear') clearAll();
+      else if(key==='backspace') backspace();
+      else if(key==='sign') toggleSign();
+      else if(key==='percent') applyPercent();
+      else if(key==='=') equals();
+      else if(key==='+'||key==='-'||key==='*'||key==='/') chooseOperator(key);
+    });
+
+    render();
     /* Minimizar/expandir de este widget se maneja de forma centralizada en initWidgetChrome. */
   })();
 
