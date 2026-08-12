@@ -1244,6 +1244,10 @@
       </div>
       <div class="entries" id="dayEntries"></div>
       <h4 style="margin:14px 0 6px;font-size:13px;color:var(--ink-dim);">Detalle de llamadas (Call Date / Call Start / Duration)</h4>
+      <div style="display:flex;align-items:center;gap:8px;margin:-2px 0 8px;flex-wrap:wrap;">
+        <button class="btn ghost sm" id="dayBtnRefreshPortal" type="button" title="Trae llamadas nuevas del portal (backend, extensión o Supabase, según lo que tengas configurado en Ajustes) que aún no aparecen en el histórico auditado">↻ Actualizar desde portal</button>
+        <span class="rate-status" id="dayRefreshStatus" style="display:none;"></span>
+      </div>
       <div class="entries" id="dayCalls"></div>
     </div>
     <div class="modal-actions">
@@ -1743,6 +1747,7 @@
       cfg.sync.lastSyncAt = Date.now();
       cfg.sync.lastSyncOk = true;
       saveCfg();
+      refreshDayModalIfOpen();
       return true;
     }).catch(function(e){
       cfg.sync.lastSyncOk = false;
@@ -1849,6 +1854,7 @@
     }
 
     reconcileAuditedDays();
+    refreshDayModalIfOpen();
 
     if (parts.length > 0) {
       renderAll();
@@ -2747,6 +2753,19 @@
       box.appendChild(row);
     });
     if(typeof updateDayModalScrollBtns==='function') setTimeout(updateDayModalScrollBtns, 0);
+  }
+  /* refreshDayModalIfOpen — si el modal "Editar día" está abierto, refresca su
+     detalle de llamadas/entradas. Se llama al final de cualquier vía de
+     sincronización (pullFromServer, processExtensionData — usada por el bridge
+     de la extensión y por Supabase —, e importar JSON de extensión) para que una
+     llamada nueva del portal que llega mientras el usuario tiene abierto ese
+     día en la pestaña Ciclo se vea reflejada de inmediato, sin tener que cerrar
+     y reabrir el modal. */
+  function refreshDayModalIfOpen(){
+    if(dayModal && dayModal.classList.contains('open') && editingISO){
+      renderDayEntries();
+      renderDayCalls();
+    }
   }
   function renderDayEntries(){
     var list = entries[editingISO]||[];
@@ -3689,6 +3708,40 @@
     });
   });
 
+  /* ── Actualizar desde portal (dentro del modal "Editar día", pestaña Ciclo) ──
+     Dispara TODAS las vías de sincronización disponibles (backend si está
+     configurado, Supabase si está configurado, y una solicitud al bridge de la
+     extensión por si está instalada en este Chrome) sin que el usuario tenga
+     que salir del día que está revisando. Cada una de esas vías ya llama a
+     refreshDayModalIfOpen() al terminar, así que el detalle de llamadas de
+     este modal se actualiza solo apenas llegue algo nuevo. */
+  document.getElementById('dayBtnRefreshPortal').addEventListener('click', function() {
+    var statusEl = document.getElementById('dayRefreshStatus');
+    statusEl.style.display = 'block';
+    statusEl.textContent = '…Buscando llamadas nuevas del portal';
+    var promises = [];
+    if (syncConfigured()) promises.push(pullFromServer());
+    if (cfg.supabase && cfg.supabase.url && cfg.supabase.anonKey) promises.push(pullFromSupabase(null));
+    window.postMessage({ type: 'BITACORA_REQUEST_SYNC' }, window.location.origin);
+    var tid = setTimeout(function() {
+      if (statusEl.textContent.indexOf('…') === 0) {
+        statusEl.textContent = 'Sin respuesta — configura backend/Supabase en Ajustes o instala la extensión.';
+      }
+    }, 3000);
+    window.addEventListener('message', function clear(ev) {
+      if (ev.data && ev.data.type === 'BITACORA_BRIDGE_SYNC') {
+        clearTimeout(tid);
+        window.removeEventListener('message', clear);
+      }
+    });
+    if (promises.length > 0) {
+      Promise.all(promises).then(function() {
+        clearTimeout(tid);
+        statusEl.textContent = '✓ Actualizado — revisa el detalle de llamadas abajo.';
+      });
+    }
+  });
+
   document.getElementById('btnSupabaseTest').addEventListener('click', function() {
     var sbUrl = document.getElementById('cfgSupabaseUrl').value.trim().replace(/\/+$/, '');
     var sbKey = document.getElementById('cfgSupabaseAnonKey').value.trim();
@@ -3787,6 +3840,7 @@
 
         reconcileAuditedDays();
         renderAll();
+        refreshDayModalIfOpen();
         statusEl.textContent = parts.length>0
           ? '✓ Importado: '+parts.join(' · ')+'.'
           : 'El archivo no tiene entradas para importar.';
