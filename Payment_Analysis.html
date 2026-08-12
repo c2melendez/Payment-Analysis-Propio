@@ -700,7 +700,9 @@
     font-family:'Space Grotesk',sans-serif;font-size:25px;font-weight:700;text-align:right;
     background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;
     overflow-x:auto;white-space:nowrap;
+    width:100%;box-sizing:border-box;color:var(--ink);outline:none;display:block;
   }
+  .calc-display:focus{border-color:var(--accent);}
   .calc-display::-webkit-scrollbar{height:0;}
   .calc-expr{
     font-size:10.5px;color:var(--ink-faint);text-align:right;min-height:14px;
@@ -934,7 +936,7 @@
     </div>
   </div>
   <div class="calc-body w-body" id="calcBody">
-    <div class="calc-display" id="calcDisplay">0</div>
+    <input class="calc-display" id="calcDisplay" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="0">
     <div class="calc-expr" id="calcExpr">&nbsp;</div>
     <div class="calc-grid">
       <button class="calc-btn calc-fn" data-key="clear">C</button>
@@ -2274,22 +2276,60 @@
   tickClock(); setInterval(tickClock, 15000);
 
   /* ---------- Tasa de cambio oficial: bancos locales de Honduras, valor de COMPRA ----------
-     Fuentes: Ficohsa, Banpaís y Banco de Occidente (páginas públicas con la tasa en texto plano).
+     Se consulta en dos niveles:
+       1) PRIMARY_BANK_SOURCES: los sitios indicados explícitamente como fuente preferida
+          para la tasa del día (siempre se captura el valor de "Compra").
+       2) FALLBACK_BANK_SOURCES: Ficohsa, Banpaís y Banco de Occidente (páginas ya validadas
+          con selectores específicos) — solo se consultan si NINGÚN sitio primario respondió
+          o dejó extraer un valor válido de "Compra".
      BAC no expone una página estática con la tasa (queda detrás de banca en línea), así que no
      se puede leer automáticamente; queda como fuente de referencia manual.
      Se leen vía un proxy CORS porque los bancos no habilitan peticiones cruzadas desde un archivo
-     local. Si ninguna fuente responde, se usa una referencia de mercado; si tampoco hay conexión,
-     se conserva la última tasa guardada (requisito de continuidad sin internet). */
-  var BANK_SOURCES = [
-    {name:'Ficohsa', url:'https://www.ficohsa.hn/tasas-de-cambio', parse:function(t){
+     local. Si ninguna fuente (primaria ni de respaldo) responde, se usa una referencia de mercado;
+     si tampoco hay conexión, se conserva la última tasa guardada (requisito de continuidad sin
+     internet). */
+
+  /* Extractor genérico del valor de "Compra": busca la etiqueta "Compra" cerca de un número con
+     formato de tasa (##.####), en cualquiera de los dos órdenes en que suele aparecer en estas
+     páginas. Se usa para los sitios primarios, cuyo marcado exacto no está validado a mano. */
+  function parseCompraGeneric(t){
+    var m = t.match(/Compra[\s\S]{0,25}?([\d]{2}\.[\d]{2,4})/i);
+    if(m) return parseFloat(m[1]);
+    m = t.match(/([\d]{2}\.[\d]{2,4})[\s\S]{0,15}?Compra/i);
+    if(m) return parseFloat(m[1]);
+    return null;
+  }
+
+  /* Fuentes primarias (item Prompt.md #2): se consultan primero, en paralelo. */
+  var PRIMARY_BANK_SOURCES = [
+    {name:'Sucursal Electrónica (BAC)', url:'https://www.sucursalelectronica.com/redir/showLogin.go', parse:parseCompraGeneric},
+    {name:'Banpaís', url:'https://www.banpais.hn/divisas/barradolar.php', parse:function(t){
+      var m = t.match(/Compra:?\s*([\d]+\.[\d]{2,4})/i);
+      return m ? parseFloat(m[1]) : parseCompraGeneric(t);
+    }},
+    {name:'Banco de Occidente', url:'https://www.bancodeoccidente.hn/', parse:parseCompraGeneric},
+    {name:'Ficohsa', url:'https://www.ficohsa.hn/', parse:parseCompraGeneric},
+    {name:'Banrural', url:'https://www.banrural.com.hn/', parse:parseCompraGeneric},
+    {name:'BAC Credomatic', url:'https://www.baccredomatic.com/es-hn', parse:parseCompraGeneric},
+    {name:'Banco Atlántida', url:'https://bancatlan.hn/', parse:parseCompraGeneric},
+    {name:'Davivienda', url:'https://www.davivienda.com.hn/banco', parse:parseCompraGeneric},
+    {name:'Banco Promerica', url:'https://www.bancopromerica.com/', parse:parseCompraGeneric},
+    {name:'Banco de Occidente (en línea)', url:'https://www.bancodeoccidente.hn/enlinea/', parse:parseCompraGeneric},
+    {name:'Banco Cuscatlán', url:'https://www.bancocuscatlan.com.hn/persona/', parse:parseCompraGeneric}
+  ];
+
+  /* Fuentes de respaldo: las 3 originales, con selectores específicos ya probados.
+     Solo se usan si ningún sitio primario devuelve una tasa válida. */
+  var FALLBACK_BANK_SOURCES = [
+    {name:'Ficohsa (respaldo)', url:'https://www.ficohsa.hn/tasas-de-cambio', parse:function(t){
       var m = t.match(/D[oó]lar[\s\S]{0,25}?Compra[\s\S]{0,15}?([\d]+\.[\d]{2,4})/i) || t.match(/Compra[\s\S]{0,15}?([\d]+\.[\d]{2,4})/i);
       return m ? parseFloat(m[1]) : null;
     }},
-    {name:'Banpaís', url:'https://www.banpais.hn/divisas/barradolar.php', parse:function(t){
+    {name:'Banpaís (respaldo)', url:'https://www.banpais.hn/divisas/barradolar.php', parse:function(t){
       var m = t.match(/Compra:?\s*([\d]+\.[\d]{2,4})/i);
       return m ? parseFloat(m[1]) : null;
     }},
-    {name:'Banco de Occidente', url:'https://www.bancodeoccidente.hn/banca-personas/internacional/divisas-personas', parse:function(t){
+    {name:'Banco de Occidente (respaldo)', url:'https://www.bancodeoccidente.hn/banca-personas/internacional/divisas-personas', parse:function(t){
       // La página lista los encabezados "Venta · Compra" y luego, en ese mismo orden, los dos valores del día.
       var m = t.match(/Hoy\D{0,12}?([\d]+\.[\d]{2,4})\D{0,12}?([\d]+\.[\d]{2,4})/i);
       return m ? parseFloat(m[2]) : null;
@@ -2358,34 +2398,50 @@
         return;
       }
     }
-    if(statusEl) statusEl.textContent = 'Consultando tasa de compra en bancos locales (Ficohsa, Banpaís, Banco de Occidente)…';
-    var attempts = BANK_SOURCES.map(function(s){ return fetchBankRate(s).catch(function(){ return null; }); });
-    Promise.all(attempts).then(function(results){
-      var ok = results.filter(Boolean);
-      if(ok.length>0){
-        var avg = ok.reduce(function(s,r){return s+r.rate;},0)/ok.length;
-        cfg.exchangeRate = Math.round(avg*10000)/10000;
-        cfg.exchangeRateSource = ok.map(function(r){return r.name;}).join(' · ');
-        cfg.exchangeRateUpdated = new Date().toISOString();
-        saveCfg();
-        var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
-        if(statusEl) statusEl.textContent = 'Tasa de compra: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL — fuentes: '+cfg.exchangeRateSource+' ('+fmtUpdated(cfg.exchangeRateUpdated)+').';
-        renderAll();
-      } else {
-        fetch('https://open.er-api.com/v6/latest/USD').then(function(r){ return r.json(); }).then(function(data){
-          if(data && data.rates && data.rates.HNL){
-            cfg.exchangeRate = data.rates.HNL;
-            cfg.exchangeRateSource = 'Referencia de mercado (bancos locales no disponibles)';
-            cfg.exchangeRateUpdated = new Date().toISOString();
-            saveCfg();
-            var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
-            if(statusEl) statusEl.textContent = 'Bancos locales no disponibles. Usando referencia de mercado: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL.';
-            renderAll();
-          } else { throw new Error('sin datos'); }
-        }).catch(function(){
-          if(statusEl) statusEl.textContent = 'Sin conexión a ninguna fuente. Se mantiene la última tasa guardada: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL'+(cfg.exchangeRateUpdated ? ' (actualizada '+fmtUpdated(cfg.exchangeRateUpdated)+')' : '')+'.';
-        });
-      }
+
+    function tryTier(sources){
+      var attempts = sources.map(function(s){ return fetchBankRate(s).catch(function(){ return null; }); });
+      return Promise.all(attempts).then(function(results){ return results.filter(Boolean); });
+    }
+
+    function applyBankResult(ok){
+      var avg = ok.reduce(function(s,r){return s+r.rate;},0)/ok.length;
+      cfg.exchangeRate = Math.round(avg*10000)/10000;
+      cfg.exchangeRateSource = ok.map(function(r){return r.name;}).join(' · ');
+      cfg.exchangeRateUpdated = new Date().toISOString();
+      saveCfg();
+      var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
+      if(statusEl) statusEl.textContent = 'Tasa de compra: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL — fuentes: '+cfg.exchangeRateSource+' ('+fmtUpdated(cfg.exchangeRateUpdated)+').';
+      renderAll();
+    }
+
+    function useMarketReference(){
+      fetch('https://open.er-api.com/v6/latest/USD').then(function(r){ return r.json(); }).then(function(data){
+        if(data && data.rates && data.rates.HNL){
+          cfg.exchangeRate = data.rates.HNL;
+          cfg.exchangeRateSource = 'Referencia de mercado (bancos locales no disponibles)';
+          cfg.exchangeRateUpdated = new Date().toISOString();
+          saveCfg();
+          var inp = document.getElementById('cfgRate'); if(inp) inp.value = cfg.exchangeRate;
+          if(statusEl) statusEl.textContent = 'Bancos locales no disponibles. Usando referencia de mercado: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL.';
+          renderAll();
+        } else { throw new Error('sin datos'); }
+      }).catch(function(){
+        if(statusEl) statusEl.textContent = 'Sin conexión a ninguna fuente. Se mantiene la última tasa guardada: 1 USD = '+cfg.exchangeRate.toFixed(4)+' HNL'+(cfg.exchangeRateUpdated ? ' (actualizada '+fmtUpdated(cfg.exchangeRateUpdated)+')' : '')+'.';
+      });
+    }
+
+    if(statusEl) statusEl.textContent = 'Consultando tasa de compra en sitios primarios (bancos locales)…';
+    // 1) Sitios primarios (Prompt.md #2). Si al menos uno entrega un valor válido de "Compra", se usa.
+    tryTier(PRIMARY_BANK_SOURCES).then(function(ok){
+      if(ok.length>0){ applyBankResult(ok); return; }
+      // 2) Ningún sitio primario respondió: se cae a los 3 sitios de respaldo ya validados.
+      if(statusEl) statusEl.textContent = 'Sitios primarios no disponibles. Consultando respaldo (Ficohsa, Banpaís, Banco de Occidente)…';
+      tryTier(FALLBACK_BANK_SOURCES).then(function(okFallback){
+        if(okFallback.length>0){ applyBankResult(okFallback); return; }
+        // 3) Tampoco hubo respaldo: referencia de mercado, y si falla, se conserva la última tasa guardada.
+        useMarketReference();
+      });
     });
   }
 
@@ -4787,8 +4843,24 @@
     }
 
     function render(){
-      displayEl.textContent = current;
+      displayEl.value = current;
       exprEl.innerHTML = exprText ? exprText : '&nbsp;';
+    }
+
+    /* Deja pasar solo dígitos, un signo "-" inicial y un único punto decimal.
+       Se usa al escribir directamente en la pantalla (teclado, pegar, cortar, etc.)
+       para que el operando siga siendo un número válido aunque la edición sea libre. */
+    function sanitizeOperand(raw){
+      var neg = raw.charAt(0)==='-';
+      var s = raw.replace(/[^0-9.]/g,'');
+      var dot = s.indexOf('.');
+      if(dot!==-1){ s = s.slice(0,dot+1) + s.slice(dot+1).replace(/\./g,''); }
+      if(s.replace('.','').length > MAX_DIGITS){
+        var intPart = s.split('.')[0];
+        var decPart = s.indexOf('.')!==-1 ? '.'+s.split('.')[1] : '';
+        s = (intPart+decPart).slice(0, MAX_DIGITS + (decPart?1:0));
+      }
+      return (neg?'-':'') + s;
     }
 
     function inputDigit(d){
@@ -4884,6 +4956,54 @@
       else if(key==='percent') applyPercent();
       else if(key==='=') equals();
       else if(key==='+'||key==='-'||key==='*'||key==='/') chooseOperator(key);
+      displayEl.focus();
+    });
+
+    /* ---------- Edición desde teclado y edición libre de la pantalla ----------
+       La pantalla es un <input> real: el usuario puede ubicar el cursor con clic,
+       seleccionar texto, copiar, cortar y pegar de forma nativa del navegador.
+       Dígitos, punto decimal, Backspace/Delete y flechas de cursor se dejan pasar
+       tal cual (edición nativa) y solo se sanea el resultado para que siga siendo
+       un número válido. Las teclas de operación ("/", "*", "+", "-", Enter, "%",
+       Escape) se interceptan para que actúen igual que sus botones equivalentes. */
+    displayEl.addEventListener('keydown', function(e){
+      var k = e.key;
+      if(k==='Enter' || k==='=' ){ e.preventDefault(); equals(); return; }
+      if(k==='/' || k==='*' || k==='+' || k==='-'){ e.preventDefault(); chooseOperator(k); return; }
+      if(k==='%'){ e.preventDefault(); applyPercent(); return; }
+      if(k==='Escape'){ e.preventDefault(); clearAll(); return; }
+      if(/^[0-9]$/.test(k) || k==='.'){
+        // Justo después de elegir un operador o de pulsar "=", el primer dígito
+        // inicia un número nuevo (igual que al tocar los botones), en vez de
+        // insertarse dentro del resultado/placeholder anterior.
+        if(justEvaluated || freshOperand){ e.preventDefault(); inputDigit(k); return; }
+        return; // edición nativa normal, sincronizada por el listener "input"
+      }
+      if(k==='Backspace' || k==='Delete'){
+        // Igual que el botón ⌫: no hace nada justo después de un operador o de "=".
+        if(justEvaluated || freshOperand){ e.preventDefault(); return; }
+        return; // edición nativa normal (borra en la posición del cursor)
+      }
+      // Home/End, flechas, Ctrl/Cmd+A/C/X/V, etc.: se dejan pasar sin interferir,
+      // para permitir selección, copiar, cortar y pegar de forma nativa.
+    });
+
+    displayEl.addEventListener('input', function(){
+      if(justEvaluated){ exprText = ''; justEvaluated = false; }
+      freshOperand = false;
+      var raw = displayEl.value;
+      var sanitized = sanitizeOperand(raw);
+      current = sanitized === '' || sanitized === '-' ? '0' : sanitized;
+      if(sanitized !== raw){
+        // Se removieron caracteres inválidos (p. ej. al pegar texto no numérico):
+        // se reescribe la pantalla y se intenta conservar la posición del cursor.
+        var pos = displayEl.selectionStart;
+        var diff = raw.length - sanitized.length;
+        displayEl.value = current;
+        var newPos = Math.max(0, pos - diff);
+        try{ displayEl.setSelectionRange(newPos, newPos); }catch(e){}
+      }
+      exprEl.innerHTML = exprText ? exprText : '&nbsp;';
     });
 
     render();
