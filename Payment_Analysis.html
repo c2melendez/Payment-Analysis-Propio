@@ -1491,17 +1491,34 @@
      entrada/llamada que no venga de esa importación. */
   function reconcileAuditedDays(){
     var changed = false;
-    Object.keys(entries).forEach(function(dISO){
-      if(!isAuditedDate(dISO)) return;
-      var arr = entries[dISO]||[];
-      var kept = arr.filter(function(e){ return e && e.id && e.id.indexOf('imp_')===0; });
-      if(kept.length !== arr.length){ entries[dISO] = kept; changed = true; }
-    });
+    // calls primero: para un día auditado se conserva 1) todo lo 'hist_*' (el
+    // histórico auditado, manda siempre) y 2) cualquier llamada NUEVA cuya hora
+    // de inicio sea POSTERIOR al último corte auditado (isCallAfterAudit) —
+    // es decir, un evento que Analytics todavía no reportó, no algo que ya
+    // esté cubierto por el resumen auditado. Antes esto descartaba TODO lo que
+    // no fuera 'hist_*', lo que borraba llamadas de último momento (p. ej.
+    // 11:51PM/11:58PM) capturadas por el portal pero aún no auditadas.
+    var keptCallIdsByDate = {};
     Object.keys(calls).forEach(function(dISO){
       if(!isAuditedDate(dISO)) return;
       var arr = calls[dISO]||[];
-      var kept = arr.filter(function(c){ return c && c.id && c.id.indexOf('hist_')===0; });
+      var kept = arr.filter(function(c){
+        if(c && c.id && c.id.indexOf('hist_')===0) return true;
+        return !!(c && c.start && isCallAfterAudit(dISO, c.start));
+      });
       if(kept.length !== arr.length){ calls[dISO] = kept; changed = true; }
+      keptCallIdsByDate[dISO] = {};
+      kept.forEach(function(c){ if(c && c.id && c.id.indexOf('hist_')!==0) keptCallIdsByDate[dISO][c.id] = true; });
+    });
+    // entries: se conserva la entrada canónica auditada (imp_YYYY-MM-DD) más
+    // cualquier entrada cuyo id corresponda a una llamada nueva que se acaba
+    // de conservar arriba (mismo criterio — no descartarla si ya pasó isCallAfterAudit).
+    Object.keys(entries).forEach(function(dISO){
+      if(!isAuditedDate(dISO)) return;
+      var keepIds = keptCallIdsByDate[dISO] || {};
+      var arr = entries[dISO]||[];
+      var kept = arr.filter(function(e){ return e && e.id && (e.id.indexOf('imp_')===0 || keepIds[e.id]); });
+      if(kept.length !== arr.length){ entries[dISO] = kept; changed = true; }
     });
     if(changed){ saveEntries(); saveCalls(); }
     return changed;
@@ -1673,13 +1690,16 @@
       // eliminó — el único merge de `entries` válido es el de
       // `cleanRemoteEntries` más abajo, ya deduplicado por fecha.
       //
-      // Llamadas del portal: NUNCA se apilan sobre un día ya auditado por el
-      // dashboard (isAuditedDate) — ese resumen ya reemplazó calls[dISO] por
-      // completo arriba, vía importRowsToEntries/mergeImportedDay. Para los
-      // días sin auditar, se fusiona por IDENTIDAD (fecha+hora de inicio) y
+      // Llamadas del portal: NUNCA se apilan sobre las llamadas que el día ya
+      // auditado por el dashboard SÍ cubre (ese resumen ya reemplazó calls[dISO]
+      // arriba, vía importRowsToEntries/mergeImportedDay) — pero SÍ se permiten
+      // llamadas nuevas con hora posterior al último corte auditado (isCallAfterAudit),
+      // porque Analytics aún no las reportó (p. ej. llamadas de último momento
+      // capturadas por el portal antes de que exista una auditoría más reciente).
+      // Para los días sin auditar, se fusiona por IDENTIDAD (fecha+hora de inicio) y
       // jerarquía de fuente, no por id — así una misma llamada recapturada
       // varias veces actualiza el mismo registro en vez de duplicarlo.
-      var remoteCallsForMerge = remoteCalls.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+      var remoteCallsForMerge = remoteCalls.filter(function(r){ return r.date && isCallAfterAudit(r.date, r.callStart); });
       upsertCallsByIdentity(calls, remoteCallsForMerge);
       // ── Deduplicar entradas remotas por fecha ─────────────────────────────
       // El backend puede tener múltiples entradas por día (entradas canónicas
@@ -1713,7 +1733,7 @@
       // Solo agregar llamadas a entries para fechas NO cubiertas por un registro
       // auditado — de lo contrario los minutos individuales se apilan encima del
       // resumen y multiplican el total.
-      var callsForEntries = remoteCalls.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+      var callsForEntries = remoteCalls.filter(function(r){ return r.date && isCallAfterAudit(r.date, r.callStart); });
       mergeById(entries, callsForEntries, function(r){
         return {id:r.id, min:r.min, nota:'Sincronizado del backend'+(r.callStart?' · '+r.callStart:'')};
       });
@@ -1796,7 +1816,7 @@
     //    upsertCallsByIdentity la agregaba igual, aunque el día ya estuviera auditado.
     //    Se excluyen aquí los días ya auditados por completo (igual que hacen
     //    fileImportExt y pullFromServer) para que el histórico mande sin excepción.
-    var portalCalls = (callItems || []).filter(function(r) { return r.date && r.id && !isAuditedDate(r.date); })
+    var portalCalls = (callItems || []).filter(function(r) { return r.date && r.id && isCallAfterAudit(r.date, r.callStart); })
       .map(function(r) { return Object.assign({}, r, { source: r.source || 'portal-json' }); });
 
     if (portalCalls.length > 0) {
@@ -3752,7 +3772,7 @@
         //    registro en vez de agregarse como fila nueva.
         var callItems = data.calls || [];
         if(Array.isArray(callItems) && callItems.length>0){
-          var liveCalls = callItems.filter(function(r){ return r.date && !isAuditedDate(r.date); });
+          var liveCalls = callItems.filter(function(r){ return r.date && isCallAfterAudit(r.date, r.callStart); });
           var before = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
           upsertCallsByIdentity(calls, liveCalls.map(function(r){ return Object.assign({}, r, {source: r.source||'portal-json'}); }));
           var after = Object.keys(calls).reduce(function(n,d){ return n + (calls[d]||[]).length; }, 0);
@@ -3832,6 +3852,46 @@
      encima del resumen auditado y duplicar los minutos. */
   function isAuditedDate(dISO){
     return (entries[dISO]||[]).some(function(e){ return e.id && e.id.indexOf('imp_')===0; });
+  }
+  /* parseTimeToMinutes — como parseHour12 pero conserva los minutos (no solo la
+     hora), necesario para comparar con precisión "07:15 PM" vs "07:20 PM". */
+  function parseTimeToMinutes(str){
+    var s = String(str||'').trim();
+    var m = s.match(/^(\d{1,2}):(\d{2})\s*([AP]M)/i);
+    if(!m) return null;
+    var h = parseInt(m[1],10) % 12;
+    if(/PM/i.test(m[3])) h += 12;
+    return h*60 + parseInt(m[2],10);
+  }
+  /* lastAuditedCallMinutes — hora (en minutos desde medianoche) de la llamada
+     auditada MÁS TARDÍA que trae el histórico de Analytics para ese día (solo
+     mira las filas 'hist_*' que dejó importRowsToEntries). null si el día no
+     tiene ninguna hora de inicio capturada en el histórico auditado. */
+  function lastAuditedCallMinutes(dISO){
+    var max = null;
+    (calls[dISO]||[]).forEach(function(c){
+      if(!c || !c.id || c.id.indexOf('hist_')!==0) return;
+      var mins = parseTimeToMinutes(c.start);
+      if(mins!=null && (max==null || mins>max)) max = mins;
+    });
+    return max;
+  }
+  /* isCallAfterAudit — reemplaza el uso de "!isAuditedDate(dISO)" como filtro de
+     llamadas del portal/backend. Un día ya auditado ya NO bloquea todas las
+     llamadas nuevas: solo se descartan las que Analytics ya cubrió (hora <=
+     último corte auditado). Una llamada con hora POSTERIOR al último corte es,
+     por definición, un evento nuevo que Analytics todavía no reportó, y debe
+     poder importarse igual (p. ej. llamadas de último momento antes de medianoche
+     capturadas por el portal pero aún no auditadas). Si el día no está auditado,
+     se comporta igual que antes (siempre pasa). Si está auditado pero no se puede
+     determinar el corte, o la llamada no trae hora, se descarta por seguridad
+     (mismo comportamiento conservador que había antes). */
+  function isCallAfterAudit(dISO, startLabel){
+    if(!isAuditedDate(dISO)) return true;
+    var cutoff = lastAuditedCallMinutes(dISO);
+    if(cutoff==null) return false;
+    var mins = parseTimeToMinutes(startLabel);
+    return mins!=null && mins > cutoff;
   }
 
   function parseMoneyLoose(raw){
